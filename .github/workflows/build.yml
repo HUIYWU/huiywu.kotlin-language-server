@@ -25,9 +25,9 @@ jobs:
         uses: gradle/gradle-build-action@v2
       - name: Build
         run: |
-        if [ "${{ runner.os }}" != "Windows" ]; then
+          if [ "${{ runner.os }}" != "Windows" ]; then
             chmod +x gradlew
-        fi
+          fi
             ./gradlew :server:build :shared:build -PjavaVersion=${{ matrix.java }}
     - name: Detekt
         run: ./gradlew detekt -PjavaVersion=${{ matrix.java }}
