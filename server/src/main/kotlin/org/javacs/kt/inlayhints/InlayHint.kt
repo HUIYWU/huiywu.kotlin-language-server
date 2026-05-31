@@ -35,15 +35,8 @@ import org.jetbrains.kotlin.resolve.lazy.NoDescriptorForDeclarationException
 import org.jetbrains.kotlin.types.KotlinType
 import org.jetbrains.kotlin.types.error.ErrorType
 
-private inline fun <T> suppressDescriptorLookupFailure(block: () -> T?): T? =
-    try {
-        block()
-    } catch (_: NoDescriptorForDeclarationException) {
-        null
-    }
-
 private fun PsiElement.determineType(ctx: BindingContext): KotlinType? =
-    suppressDescriptorLookupFailure {
+    try {
         when (this) {
             is KtNamedFunction -> {
                 val descriptor = ctx[BindingContext.FUNCTION, this]
@@ -72,6 +65,8 @@ private fun PsiElement.determineType(ctx: BindingContext): KotlinType? =
             }
             else -> null
         }
+    } catch (_: NoDescriptorForDeclarationException) {
+        null
     }
 
 @Suppress("ReturnCount")

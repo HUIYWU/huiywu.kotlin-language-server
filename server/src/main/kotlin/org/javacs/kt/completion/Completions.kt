@@ -500,7 +500,11 @@ private fun scopeIdentifiers(scope: HierarchicalScope): Sequence<DeclarationDesc
 private fun explodeConstructors(declaration: DeclarationDescriptor): Sequence<DeclarationDescriptor> {
     return when (declaration) {
         is ClassDescriptor ->
-            declaration.constructors.asSequence() + declaration
+            try {
+                declaration.constructors.asSequence() + declaration
+            } catch (_: AssertionError) {
+                sequenceOf(declaration)
+            }
         else ->
             sequenceOf(declaration)
     }
