@@ -20,10 +20,18 @@ import org.javacs.kt.completion.DECL_RENDERER
 import org.javacs.kt.position.position
 import org.javacs.kt.util.findParent
 import org.javacs.kt.signaturehelp.getDocString
+import org.jetbrains.kotlin.resolve.lazy.NoDescriptorForDeclarationException
 import org.jetbrains.kotlin.utils.IDEAPluginsCompatibilityAPI
 
+private inline fun <T> suppressDescriptorLookupFailure(block: () -> T?): T? =
+    try {
+        block()
+    } catch (_: NoDescriptorForDeclarationException) {
+        null
+    }
+
 fun hoverAt(file: CompiledFile, cursor: Int): Hover? {
-    val (ref, target) = file.referenceAtPoint(cursor) ?: return typeHoverAt(file, cursor)
+    val (ref, target) = file.referenceExpressionAtPoint(cursor) ?: return typeHoverAt(file, cursor)
     val javaDoc = getDocString(file, cursor)
     val location = ref.textRange
     val hoverText = DECL_RENDERER.render(target)
@@ -38,7 +46,9 @@ private fun typeHoverAt(file: CompiledFile, cursor: Int): Hover? {
     val expression = file.parseAtPoint(cursor)?.findParent<KtExpression>() ?: return null
     val javaDoc: String = expression.children.mapNotNull { (it as? PsiDocCommentBase)?.text }.map(::renderJavaDoc).firstOrNull() ?: ""
     val scope = file.scopeAtPoint(cursor) ?: return null
-    val hoverText = renderTypeOf(expression, file.bindingContextOf(expression, scope))
+    val hoverText = suppressDescriptorLookupFailure {
+        renderTypeOf(expression, file.bindingContextOf(expression, scope))
+    } ?: return null
     val hover = MarkupContent("markdown", listOf("```kotlin\n$hoverText\n```", javaDoc).filter { it.isNotEmpty() }.joinToString("\n---\n"))
     return Hover(hover)
 }
@@ -69,25 +79,26 @@ private fun renderJavaDoc(text: String): String {
 }
 
 @OptIn(IDEAPluginsCompatibilityAPI::class)
-private fun renderTypeOf(element: KtExpression, bindingContext: BindingContext): String? {
-    if (element is KtCallableDeclaration) {
-        val descriptor = bindingContext[BindingContext.DECLARATION_TO_DESCRIPTOR, element]
-        if (descriptor != null) {
-            when (descriptor) {
-                is CallableDescriptor -> return descriptor.returnType?.let(TYPE_RENDERER::renderType)
+private fun renderTypeOf(element: KtExpression, bindingContext: BindingContext): String? =
+    suppressDescriptorLookupFailure {
+        if (element is KtCallableDeclaration) {
+            val descriptor = bindingContext[BindingContext.DECLARATION_TO_DESCRIPTOR, element]
+            if (descriptor != null) {
+                when (descriptor) {
+                    is CallableDescriptor -> return@suppressDescriptorLookupFailure descriptor.returnType?.let(TYPE_RENDERER::renderType)
+                }
             }
         }
-    }
 
-    val expressionType = bindingContext[BindingContext.EXPRESSION_TYPE_INFO, element]?.type ?: element.getType(bindingContext)
-    val result = expressionType?.let { TYPE_RENDERER.renderType(it) } ?: return null
+        val expressionType = bindingContext[BindingContext.EXPRESSION_TYPE_INFO, element]?.type ?: element.getType(bindingContext)
+        val result = expressionType?.let { TYPE_RENDERER.renderType(it) } ?: return@suppressDescriptorLookupFailure null
 
-    val smartCast = bindingContext[BindingContext.SMARTCAST, element]
-    if (smartCast != null && element is KtReferenceExpression) {
-        val declaredType = (bindingContext[BindingContext.REFERENCE_TARGET, element] as? CallableDescriptor)?.returnType
-        if (declaredType != null) {
-            return result + " (smart cast from " + TYPE_RENDERER.renderType(declaredType) + ")"
+        val smartCast = bindingContext[BindingContext.SMARTCAST, element]
+        if (smartCast != null && element is KtReferenceExpression) {
+            val declaredType = (bindingContext[BindingContext.REFERENCE_TARGET, element] as? CallableDescriptor)?.returnType
+            if (declaredType != null) {
+                return@suppressDescriptorLookupFailure result + " (smart cast from " + TYPE_RENDERER.renderType(declaredType) + ")"
+            }
         }
+        result
     }
-    return result
-}

@@ -31,40 +31,47 @@ import org.jetbrains.kotlin.resolve.calls.model.VarargValueArgument
 import org.jetbrains.kotlin.resolve.calls.smartcasts.getKotlinTypeForComparison
 import org.jetbrains.kotlin.resolve.calls.util.getResolvedCall
 import org.jetbrains.kotlin.resolve.calls.util.isSingleUnderscore
+import org.jetbrains.kotlin.resolve.lazy.NoDescriptorForDeclarationException
 import org.jetbrains.kotlin.types.KotlinType
 import org.jetbrains.kotlin.types.error.ErrorType
 
+private inline fun <T> suppressDescriptorLookupFailure(block: () -> T?): T? =
+    try {
+        block()
+    } catch (_: NoDescriptorForDeclarationException) {
+        null
+    }
 
 private fun PsiElement.determineType(ctx: BindingContext): KotlinType? =
-    when (this) {
-        is KtNamedFunction -> {
-            val descriptor = ctx[BindingContext.FUNCTION, this]
-            descriptor?.returnType
-        }
-        is KtCallExpression -> {
-            this.getKotlinTypeForComparison(ctx)
-        }
-        is KtParameter -> {
-            if (this.isLambdaParameter and (this.typeReference == null)) {
-                val descriptor = ctx[BindingContext.DECLARATION_TO_DESCRIPTOR, this] as CallableDescriptor
-                descriptor.returnType
-            } else null
-        }
-        is KtDestructuringDeclarationEntry -> {
-            //skip unused variable denoted by underscore
-            //https://kotlinlang.org/docs/destructuring-declarations.html#underscore-for-unused-variables
-            if (this.isSingleUnderscore) {
-                null
-            } else {
-                val resolvedCall = ctx[BindingContext.COMPONENT_RESOLVED_CALL, this]
-                resolvedCall?.resultingDescriptor?.returnType
+    suppressDescriptorLookupFailure {
+        when (this) {
+            is KtNamedFunction -> {
+                val descriptor = ctx[BindingContext.FUNCTION, this]
+                descriptor?.returnType
             }
+            is KtCallExpression -> {
+                this.getKotlinTypeForComparison(ctx)
+            }
+            is KtParameter -> {
+                if (this.isLambdaParameter && (this.typeReference == null)) {
+                    val descriptor = ctx[BindingContext.DECLARATION_TO_DESCRIPTOR, this] as? CallableDescriptor
+                    descriptor?.returnType
+                } else null
+            }
+            is KtDestructuringDeclarationEntry -> {
+                if (this.isSingleUnderscore) {
+                    null
+                } else {
+                    val resolvedCall = ctx[BindingContext.COMPONENT_RESOLVED_CALL, this]
+                    resolvedCall?.resultingDescriptor?.returnType
+                }
+            }
+            is KtProperty -> {
+                val type = this.getKotlinTypeForComparison(ctx)
+                if (type is ErrorType) null else type
+            }
+            else -> null
         }
-        is KtProperty -> {
-            val type = this.getKotlinTypeForComparison(ctx)
-            if (type is ErrorType) null else type
-        }
-        else -> null
     }
 
 @Suppress("ReturnCount")
