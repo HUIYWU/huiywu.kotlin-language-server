@@ -29,5 +29,5 @@ jobs:
             chmod +x gradlew
           fi
             ./gradlew :server:build :shared:build -PjavaVersion=${{ matrix.java }}
-    - name: Detekt
-        run: ./gradlew detekt -PjavaVersion=${{ matrix.java }}
+        - name: Detekt
+          run: ./gradlew detekt -PjavaVersion=${{ matrix.java }}
