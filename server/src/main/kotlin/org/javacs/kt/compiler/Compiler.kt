@@ -423,7 +423,7 @@ private class CompilationEnvironment(
     }
 
     fun createContainer(sourcePath: Collection<KtFile>): Pair<ComponentProvider, BindingTraceContext> {
-        val trace = CliBindingTrace(environment.project)
+        val trace = BindingTraceContext()
         val container = TopDownAnalyzerFacadeForJVM.createContainer(
             project = environment.project,
             files = sourcePath,
