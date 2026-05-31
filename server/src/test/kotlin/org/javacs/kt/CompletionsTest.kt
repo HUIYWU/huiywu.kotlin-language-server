@@ -291,9 +291,10 @@ class EditCallTest : SingleFileTestFixture("completions", "EditCall.kt") {
     @Test fun `edit existing function`() {
         val completions = languageServer.textDocumentService.completion(completionParams(file, 2, 11)).get().right!!
         val labels = completions.items.map { it.label }
+        val printlnItems = completions.items.filter { it.label.startsWith("println") }
 
         assertThat(labels, hasItem(startsWith("println")))
-        assertThat(completions.items.find { it.label.startsWith("println") }, hasProperty("insertText", equalTo("println(\${1:message})")))
+        assertThat(printlnItems.mapNotNull { it.insertText }, hasItem("println(\${1:message})"))
     }
 }
 

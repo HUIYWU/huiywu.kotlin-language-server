@@ -1,0 +1,150 @@
+DiagnosticTest > linting should not be dropped if another linting is running FAILED
+    java.lang.AssertionError: 
+    Expected: an empty collection
+         but: <[Diagnostic [
+      range = Range [
+        start = Position [
+          line = 0
+          character = 1
+        ]
+        end = Position [
+          line = 0
+          character = 11
+        ]
+      ]
+      severity = Error
+      code = Either [
+        left = INCOMPATIBLE_CLASS
+        right = null
+      ]
+      codeDescription = null
+      source = "kotlin"
+      message = "Class 'kotlin.Deprecated' was compiled with an incompatible version of Kotlin. The actual metadata version is 2.3.0, but the compiler version 2.1.0 can read versions up to 2.2.0.\nThe class is loaded from /usr/share/kotlinc/lib/kotlin-stdlib.jar!/kotlin/Deprecated.class"
+      tags = ArrayList ()
+      relatedInformation = null
+      data = null
+    ], Diagnostic [
+      range = Range [
+        start = Position [
+          line = 0
+          character = 1
+        ]
+        end = Position [
+          line = 0
+          character = 11
+        ]
+      ]
+      severity = Error
+      code = Either [
+        left = INCOMPATIBLE_CLASS
+        right = null
+      ]
+      codeDescription = null
+      source = "kotlin"
+      message = "Class 'kotlin.ReplaceWith' was compiled with an incompatible version of Kotlin. The actual metadata version is 2.3.0, but the compiler version 2.1.0 can read versions up to 2.2.0.\nThe class is loaded from /usr/share/kotlinc/lib/kotlin-stdlib.jar!/kotlin/ReplaceWith.class"
+      tags = ArrayList ()
+      relatedInformation = null
+      data = null
+    ], Diagnostic [
+      range = Range [
+        start = Position [
+          line = 0
+          character = 1
+        ]
+        end = Position [
+          line = 0
+          character = 11
+        ]
+      ]
+      severity = Error
+      code = Either [
+        left = INCOMPATIBLE_CLASS
+        right = null
+      ]
+      codeDescription = null
+      source = "kotlin"
+      message = "Class 'kotlin.DeprecationLevel' was compiled with an incompatible version of Kotlin. The actual metadata version is 2.3.0, but the compiler version 2.1.0 can read versions up to 2.2.0.\nThe class is loaded from /usr/share/kotlinc/lib/kotlin-stdlib.jar!/kotlin/DeprecationLevel.class"
+      tags = ArrayList ()
+      relatedInformation = null
+      data = null
+    ]]>
+        at org.hamcrest.MatcherAssert.assertThat(MatcherAssert.java:20)
+        at org.junit.Assert.assertThat(Assert.java:865)
+        at org.junit.Assert.assertThat(Assert.java:832)
+        at org.javacs.kt.DiagnosticTest.linting should not be dropped if another linting is running(DiagnosticTest.kt:77)
+
+DiagnosticTest > report only errors FAILED
+    java.lang.AssertionError: 
+    Expected: a collection with size <1>
+         but: collection size was <4>
+        at org.hamcrest.MatcherAssert.assertThat(MatcherAssert.java:20)
+        at org.junit.Assert.assertThat(Assert.java:865)
+        at org.junit.Assert.assertThat(Assert.java:832)
+        at org.javacs.kt.DiagnosticTest.report only errors(DiagnosticTest.kt:28)
+
+DiagnosticTest > report diagnostics on open FAILED
+    java.lang.AssertionError: 
+    Expected: a collection with size <2>
+         but: collection size was <5>
+        at org.hamcrest.MatcherAssert.assertThat(MatcherAssert.java:20)
+        at org.junit.Assert.assertThat(Assert.java:865)
+        at org.junit.Assert.assertThat(Assert.java:832)
+        at org.javacs.kt.DiagnosticTest.report diagnostics on open(DiagnosticTest.kt:16)
+
+EditCallTest > edit existing function FAILED
+    java.lang.AssertionError: 
+    Expected: a collection containing a string starting with "println"
+         but: was "WasExperimental(vararg markerClass: KClass<out Annotation>)", was "WasExperimental", was "WasExperimental(vararg markerClass: KClass<out Annotation>)", was "WasExperimental", was "WasExperimental(vararg markerClass: KClass<out Annotation>)", was "WasExperimental", was "WasExperimental(vararg markerClass: KClass<out Annotation>)", was "WasExperimental", was "DeprecatedSinceKotlin(warningSince: String = ..., errorSince: String = ..., hiddenSince: String = ...)", was "DeprecatedSinceKotlin", was "DeprecatedSinceKotlin(warningSince: String = ..., errorSince: String = ..., hiddenSince: String = ...)", was "DeprecatedSinceKotlin", was "DeprecatedSinceKotlin(warningSince: String = ..., errorSince: String = ..., hiddenSince: String = ...)", was "DeprecatedSinceKotlin", was "DeprecatedSinceKotlin(warningSince: String = ..., errorSince: String = ..., hiddenSince: String = ...)", was "DeprecatedSinceKotlin", was "ExperimentalStdlibApi()", was "ExperimentalStdlibApi", was "ExperimentalStdlibApi()", was "ExperimentalStdlibApi", was "ExperimentalStdlibApi()", was "ExperimentalStdlibApi", was "ExperimentalStdlibApi()", was "ExperimentalStdlibApi", was "ExperimentalSubclassOptIn()", was "ExperimentalSubclassOptIn", was "ExperimentalSubclassOptIn()", was "ExperimentalSubclassOptIn", was "ExperimentalMultiplatform()", was "ExperimentalMultiplatform", was "ExperimentalUnsignedTypes()", was "ExperimentalUnsignedTypes", was "ExperimentalSubclassOptIn()", was "ExperimentalSubclassOptIn", was "ExperimentalSubclassOptIn()", was "ExperimentalSubclassOptIn", was "ExperimentalContextParameters()", was "ExperimentalContextParameters", was "ExperimentalVersionOverloading()", was "ExperimentalVersionOverloading"
+        at org.hamcrest.MatcherAssert.assertThat(MatcherAssert.java:20)
+        at org.junit.Assert.assertThat(Assert.java:865)
+        at org.junit.Assert.assertThat(Assert.java:832)
+        at org.javacs.kt.EditCallTest.edit existing function(CompletionsTest.kt:295)
+
+InfixMethodTest > complete global scope FAILED
+    java.lang.AssertionError: 
+    Expected: a collection with size <3>
+         but: collection size was <1>
+        at org.hamcrest.MatcherAssert.assertThat(MatcherAssert.java:20)
+        at org.junit.Assert.assertThat(Assert.java:865)
+        at org.junit.Assert.assertThat(Assert.java:832)
+        at org.javacs.kt.InfixMethodTest.complete global scope(CompletionsTest.kt:96)
+
+InlayHintCallableParameterTest > inferred lambda parameter type FAILED
+    java.lang.AssertionError: 
+    Expected: a collection with size <1>
+         but: collection size was <0>
+        at org.hamcrest.MatcherAssert.assertThat(MatcherAssert.java:20)
+        at org.junit.Assert.assertThat(Assert.java:865)
+        at org.junit.Assert.assertThat(Assert.java:832)
+        at org.javacs.kt.InlayHintCallableParameterTest.inferred lambda parameter type(InlayHintTest.kt:128)
+
+InlayHintChainedTest > chained hints FAILED
+    java.lang.AssertionError: 
+    Expected: a collection with size <3>
+         but: collection size was <0>
+        at org.hamcrest.MatcherAssert.assertThat(MatcherAssert.java:20)
+        at org.junit.Assert.assertThat(Assert.java:865)
+        at org.junit.Assert.assertThat(Assert.java:832)
+        at org.javacs.kt.InlayHintChainedTest.chained hints(InlayHintTest.kt:147)
+
+InlayHintChainedTest > generic chained hints FAILED
+    java.lang.AssertionError: 
+    Expected: a collection with size <2>
+         but: collection size was <0>
+        at org.hamcrest.MatcherAssert.assertThat(MatcherAssert.java:20)
+        at org.junit.Assert.assertThat(Assert.java:865)
+        at org.junit.Assert.assertThat(Assert.java:832)
+        at org.javacs.kt.InlayHintChainedTest.generic chained hints(InlayHintTest.kt:159)
+
+InstanceMemberTest > find count extension function FAILED
+    java.lang.AssertionError: 
+    Expected: a collection containing "count"
+         but: was "publicExtensionFun"
+        at org.hamcrest.MatcherAssert.assertThat(MatcherAssert.java:20)
+        at org.junit.Assert.assertThat(Assert.java:865)
+        at org.junit.Assert.assertThat(Assert.java:832)
+        at org.javacs.kt.InstanceMemberTest.find count extension function(CompletionsTest.kt:27)
+
+160 tests completed, 9 failed, 5 skipped
+
+> Task :server:test FAILED
