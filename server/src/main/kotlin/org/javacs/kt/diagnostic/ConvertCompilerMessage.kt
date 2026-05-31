@@ -11,39 +11,40 @@ import java.nio.file.Paths
 import kotlin.math.max
 
 fun convertCompilerMessage(entry: CompilerMessageEntry): Pair<URI, Diagnostic>? {
-    val location = entry.location ?: return null
-    val path = location.path ?: return null
-    if (path.isBlank()) return null
+    val location = entry.location
+    val path = location?.path
+    val severity = severity(entry.severity)
 
-    val severity = severity(entry.severity) ?: return null
-    val uri = try {
-        Paths.get(path).toUri()
-    } catch (_: Exception) {
-        return null
+    return if (location != null && severity != null && !path.isNullOrBlank()) {
+        runCatching { Paths.get(path).toUri() }
+            .getOrNull()
+            ?.let { uri ->
+                val startLine = max(location.line - 1, 0)
+                val startChar = max(location.column - 1, 0)
+
+                val rawEndLine = if (location.lineEnd > 0) max(location.lineEnd - 1, startLine) else startLine
+                val rawEndChar = if (location.columnEnd > 0) max(location.columnEnd - 1, 0) else startChar + 1
+
+                val end = when {
+                    rawEndLine > startLine -> Position(rawEndLine, rawEndChar)
+                    rawEndChar > startChar -> Position(startLine, rawEndChar)
+                    else -> Position(startLine, startChar + 1)
+                }
+
+                Pair(
+                    uri,
+                    Diagnostic(
+                        Range(Position(startLine, startChar), end),
+                        entry.message,
+                        severity,
+                        "kotlin-compiler",
+                        "COMPILER_MESSAGE"
+                    )
+                )
+            }
+    } else {
+        null
     }
-
-    val startLine = max(location.line - 1, 0)
-    val startChar = max(location.column - 1, 0)
-
-    val rawEndLine = if (location.lineEnd > 0) max(location.lineEnd - 1, startLine) else startLine
-    val rawEndChar = if (location.columnEnd > 0) max(location.columnEnd - 1, 0) else startChar + 1
-
-    val end = when {
-        rawEndLine > startLine -> Position(rawEndLine, rawEndChar)
-        rawEndChar > startChar -> Position(startLine, rawEndChar)
-        else -> Position(startLine, startChar + 1)
-    }
-
-    return Pair(
-        uri,
-        Diagnostic(
-            Range(Position(startLine, startChar), end),
-            entry.message,
-            severity,
-            "kotlin-compiler",
-            "COMPILER_MESSAGE"
-        )
-    )
 }
 
 private fun severity(severity: CompilerMessageSeverity): DiagnosticSeverity? =
