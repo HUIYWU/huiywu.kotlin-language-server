@@ -1,8 +1,8 @@
 # Kotlin Language Server
 
-[![Release](https://img.shields.io/github/release/fwcd/kotlin-language-server)](https://github.com/fwcd/kotlin-language-server/releases)
-[![Build](https://github.com/fwcd/kotlin-language-server/actions/workflows/build.yml/badge.svg)](https://github.com/fwcd/kotlin-language-server/actions/workflows/build.yml)
-[![Downloads](https://img.shields.io/github/downloads/fwcd/kotlin-language-server/total)](https://github.com/fwcd/kotlin-language-server/releases)
+[![Release](https://img.shields.io/github/release/HUIYWU/huiywu.kotlin-language-server)](https://github.com/HUIYWU/huiywu.kotlin-language-server/releases)
+[![Build](https://github.com/HUIYWU/huiywu.kotlin-language-server/actions/workflows/build.yml/badge.svg)](https://github.com/HUIYWU/huiywu.kotlin-language-server/actions/workflows/build.yml)
+[![Downloads](https://img.shields.io/github/downloads/HUIYWU/huiywu.kotlin-language-server/total)](https://github.com/HUIYWU/huiywu.kotlin-language-server/releases)
 [![Chat](https://img.shields.io/badge/chat-on%20discord-7289da)](https://discord.gg/cNtppzN)
 
 A [language server](https://microsoft.github.io/language-server-protocol/) that provides smart code completion, diagnostics, hover, document symbols, definition lookup, method signature help and more for [Kotlin](https://kotlinlang.org).
@@ -20,10 +20,6 @@ Any editor conforming to LSP is supported, including [VSCode](https://github.com
 * See [Kotlin Quick Start](https://github.com/fwcd/kotlin-quick-start) for a sample project
 * See [Kotlin Debug Adapter](https://github.com/fwcd/kotlin-debug-adapter) for editor-agnostic launch and debug support of Kotlin/JVM programs
 * See [tree-sitter-kotlin](https://github.com/fwcd/tree-sitter-kotlin) for an experimental [Tree-Sitter](https://tree-sitter.github.io/tree-sitter/) grammar
-
-## Packaging
-
-[![Packaging status](https://repology.org/badge/vertical-allrepos/kotlin-language-server.svg)](https://repology.org/project/kotlin-language-server/versions)
 
 ## This repository needs your help!
 
