@@ -72,6 +72,21 @@ class KotlinLanguageServer(
     fun getProtocolExtensionService(): KotlinProtocolExtensions = protocolExtensions
 
     override fun initialize(params: InitializeParams): CompletableFuture<InitializeResult> = async.compute {
+        val serverCapabilities = createServerCapabilities()
+        val storagePath = getStoragePath(params)
+        databaseService.setup(storagePath)
+
+        applyPredefinedClasspathOptions(params)
+        applyClientCapabilities(params, serverCapabilities)
+        initializeWorkspaceFolders(params)
+
+        textDocuments.lintAll()
+
+        val serverInfo = ServerInfo("Kotlin Language Server", VERSION)
+        InitializeResult(serverCapabilities, serverInfo)
+    }
+
+    private fun createServerCapabilities(): ServerCapabilities {
         val serverCapabilities = ServerCapabilities()
         serverCapabilities.setTextDocumentSync(TextDocumentSyncKind.Incremental)
         serverCapabilities.workspace = WorkspaceServerCapabilities()
@@ -93,10 +108,10 @@ class KotlinLanguageServer(
         serverCapabilities.documentRangeFormattingProvider = Either.forLeft(true)
         serverCapabilities.executeCommandProvider = ExecuteCommandOptions(ALL_COMMANDS)
         serverCapabilities.documentHighlightProvider = Either.forLeft(true)
+        return serverCapabilities
+    }
 
-        val storagePath = getStoragePath(params)
-        databaseService.setup(storagePath)
-
+    private fun applyPredefinedClasspathOptions(params: InitializeParams) {
         getInitializationOptions(params)?.let { options ->
             config.predefinedClasspath.enabled = options.usePredefinedClasspath
             config.predefinedClasspath.entries.clear()
@@ -108,7 +123,9 @@ class KotlinLanguageServer(
                 config.predefinedClasspath.disableDependencyResolution
             )
         }
+    }
 
+    private fun applyClientCapabilities(params: InitializeParams, serverCapabilities: ServerCapabilities) {
         val clientCapabilities = params.capabilities
         config.completion.snippets.enabled = clientCapabilities?.textDocument?.completion?.completionItem?.snippetSupport ?: false
 
@@ -119,13 +136,17 @@ class KotlinLanguageServer(
         if (clientCapabilities?.textDocument?.rename?.prepareSupport ?: false) {
             serverCapabilities.renameProvider = Either.forRight(RenameOptions(false))
         }
+    }
 
-        @Suppress("DEPRECATION")
-        val folders = params.workspaceFolders?.takeIf { it.isNotEmpty() }
+    @Suppress("DEPRECATION")
+    private fun workspaceFolders(params: InitializeParams): List<WorkspaceFolder> =
+        params.workspaceFolders?.takeIf { it.isNotEmpty() }
             ?: params.rootUri?.let(::WorkspaceFolder)?.let(::listOf)
             ?: params.rootPath?.let(Paths::get)?.toUri()?.toString()?.let(::WorkspaceFolder)?.let(::listOf)
             ?: listOf()
 
+    private fun initializeWorkspaceFolders(params: InitializeParams) {
+        val folders = workspaceFolders(params)
         val progress = params.workDoneToken?.let { LanguageClientProgress("Workspace folders", it, client) }
 
         folders.forEachIndexed { i, folder ->
@@ -145,12 +166,6 @@ class KotlinLanguageServer(
             }
         }
         progress?.close()
-
-        textDocuments.lintAll()
-
-        val serverInfo = ServerInfo("Kotlin Language Server", VERSION)
-
-        InitializeResult(serverCapabilities, serverInfo)
     }
 
     private fun connectLoggingBackend() {

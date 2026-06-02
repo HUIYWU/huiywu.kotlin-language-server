@@ -57,35 +57,19 @@ class CompilerClassPath(
     ): Boolean {
         val predefinedOnlyMode = predefinedClasspathEnabled && disableDependencyResolution
         // TODO: Fetch class path and build script class path concurrently (and asynchronously)
-        val resolver = if (predefinedOnlyMode) null else defaultClassPathResolver(workspaceRoots, databaseService.db)
+        val resolver = createResolver(predefinedOnlyMode)
         var refreshCompiler = updateJavaSourcePath
 
         if (updateClassPath) {
             val predefinedEntries = predefinedClassPath.map { ClassPathEntry(it) }.toSet()
             val resolvedClassPath = resolver?.classpathOrEmpty.orEmpty()
-            val newClassPath = when {
-                predefinedOnlyMode -> predefinedEntries
-                predefinedClasspathEnabled -> resolvedClassPath + predefinedEntries
-                else -> resolvedClassPath
-            }
-            if (newClassPath != classPath) {
-                synchronized(classPath) {
-                    syncPaths(classPath, newClassPath, "class path") { it.compiledJar }
-                }
-                refreshCompiler = true
-            }
-
-            async.compute {
-                val resolvedClassPathWithSources = resolver?.classpathWithSources.orEmpty()
-                val newClassPathWithSources = when {
-                    predefinedOnlyMode -> predefinedEntries
-                    predefinedClasspathEnabled -> resolvedClassPathWithSources + predefinedEntries
-                    else -> resolvedClassPathWithSources
-                }
-                synchronized(classPath) {
-                    syncPaths(classPath, newClassPathWithSources, "class path with sources") { it.compiledJar }
-                }
-            }
+            val resolvedClassPathWithSources = resolver?.classpathWithSources.orEmpty()
+            refreshCompiler = refreshClassPath(
+                predefinedEntries,
+                resolvedClassPath,
+                resolvedClassPathWithSources,
+                predefinedOnlyMode
+            ) || refreshCompiler
         }
 
         if (updateBuildScriptClassPath) {
@@ -112,6 +96,45 @@ class CompilerClassPath(
         }
 
         return refreshCompiler
+    }
+
+    private fun createResolver(predefinedOnlyMode: Boolean) =
+        if (predefinedOnlyMode) null else defaultClassPathResolver(workspaceRoots, databaseService.db)
+
+    private fun refreshClassPath(
+        predefinedEntries: Set<ClassPathEntry>,
+        resolvedClassPath: Set<ClassPathEntry>,
+        resolvedClassPathWithSources: Set<ClassPathEntry>,
+        predefinedOnlyMode: Boolean
+    ): Boolean {
+        val newClassPath = mergedClassPath(predefinedEntries, resolvedClassPath, predefinedOnlyMode)
+        var refreshCompiler = false
+
+        if (newClassPath != classPath) {
+            synchronized(classPath) {
+                syncPaths(classPath, newClassPath, "class path") { it.compiledJar }
+            }
+            refreshCompiler = true
+        }
+
+        async.compute {
+            val newClassPathWithSources = mergedClassPath(predefinedEntries, resolvedClassPathWithSources, predefinedOnlyMode)
+            synchronized(classPath) {
+                syncPaths(classPath, newClassPathWithSources, "class path with sources") { it.compiledJar }
+            }
+        }
+
+        return refreshCompiler
+    }
+
+    private fun mergedClassPath(
+        predefinedEntries: Set<ClassPathEntry>,
+        resolvedEntries: Set<ClassPathEntry>,
+        predefinedOnlyMode: Boolean
+    ): Set<ClassPathEntry> = when {
+        predefinedOnlyMode -> predefinedEntries
+        predefinedClasspathEnabled -> resolvedEntries + predefinedEntries
+        else -> resolvedEntries
     }
 
     /** Synchronizes the given two path sets and logs the differences. */

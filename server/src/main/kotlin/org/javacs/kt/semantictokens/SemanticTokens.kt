@@ -169,10 +169,8 @@ private fun elementToken(element: PsiElement, bindingContext: BindingContext): S
                 modifiers.add(SemanticTokenModifier.READONLY)
             }
 
-            if (element is KtModifierListOwner) {
-                if (element.hasModifier(KtTokens.ABSTRACT_KEYWORD)) {
-                    modifiers.add(SemanticTokenModifier.ABSTRACT)
-                }
+            if (element.hasModifier(KtTokens.ABSTRACT_KEYWORD)) {
+                modifiers.add(SemanticTokenModifier.ABSTRACT)
             }
 
             SemanticToken(identifierRange, tokenType, modifiers)
