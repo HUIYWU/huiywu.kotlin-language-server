@@ -44,6 +44,12 @@ public data class CompilerConfiguration(
     val jvm: JVMConfiguration = JVMConfiguration()
 )
 
+public data class PredefinedClasspathConfiguration(
+    var enabled: Boolean = false,
+    var entries: MutableList<String> = mutableListOf(),
+    var disableDependencyResolution: Boolean = false
+)
+
 public data class IndexingConfiguration(
     /** Whether an index of global symbols should be built in the background. */
     var enabled: Boolean = true
@@ -76,11 +82,13 @@ data class FormattingConfiguration(
 )
 
 fun getStoragePath(params: InitializeParams): Path? {
+    return getInitializationOptions(params)?.storagePath
+}
+
+fun getInitializationOptions(params: InitializeParams): InitializationOptions? {
     params.initializationOptions?.let { initializationOptions ->
         val gson = GsonBuilder().registerTypeHierarchyAdapter(Path::class.java, GsonPathConverter()).create()
-        val options = gson.fromJson(initializationOptions as JsonElement, InitializationOptions::class.java)
-
-        return options?.storagePath
+        return gson.fromJson(initializationOptions as JsonElement, InitializationOptions::class.java)
     }
 
     return null
@@ -88,7 +96,10 @@ fun getStoragePath(params: InitializeParams): Path? {
 
 data class InitializationOptions(
     // A path to a directory used by the language server to store data. Used for caching purposes.
-    val storagePath: Path?
+    val storagePath: Path?,
+    val classpath: List<String> = emptyList(),
+    val usePredefinedClasspath: Boolean = false,
+    val disableDependencyResolution: Boolean = false
 )
 
 class GsonPathConverter : JsonDeserializer<Path?> {
@@ -110,6 +121,7 @@ public data class Configuration(
     val completion: CompletionConfiguration = CompletionConfiguration(),
     val diagnostics: DiagnosticsConfiguration = DiagnosticsConfiguration(),
     val scripts: ScriptsConfiguration = ScriptsConfiguration(),
+    val predefinedClasspath: PredefinedClasspathConfiguration = PredefinedClasspathConfiguration(),
     val indexing: IndexingConfiguration = IndexingConfiguration(),
     val externalSources: ExternalSourcesConfiguration = ExternalSourcesConfiguration(),
     val inlayHints: InlayHintsConfiguration = InlayHintsConfiguration(),

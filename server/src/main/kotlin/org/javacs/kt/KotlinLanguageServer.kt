@@ -97,6 +97,18 @@ class KotlinLanguageServer(
         val storagePath = getStoragePath(params)
         databaseService.setup(storagePath)
 
+        getInitializationOptions(params)?.let { options ->
+            config.predefinedClasspath.enabled = options.usePredefinedClasspath
+            config.predefinedClasspath.entries.clear()
+            config.predefinedClasspath.entries.addAll(options.classpath)
+            config.predefinedClasspath.disableDependencyResolution = options.disableDependencyResolution
+            classPath.updatePredefinedClasspath(
+                config.predefinedClasspath.entries,
+                config.predefinedClasspath.enabled,
+                config.predefinedClasspath.disableDependencyResolution
+            )
+        }
+
         val clientCapabilities = params.capabilities
         config.completion.snippets.enabled = clientCapabilities?.textDocument?.completion?.completionItem?.snippetSupport ?: false
 

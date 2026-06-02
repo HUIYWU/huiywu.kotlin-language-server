@@ -10,6 +10,7 @@ import java.io.File
 import java.nio.file.FileSystems
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.Paths
 
 /**
  * Manages the class path (compiled JARs, etc), the Java source path
@@ -25,6 +26,9 @@ class CompilerClassPath(
 
     private val javaSourcePath = mutableSetOf<Path>()
     private val buildScriptClassPath = mutableSetOf<Path>()
+    private val predefinedClassPath = mutableSetOf<Path>()
+    private var predefinedClasspathEnabled = false
+    private var disableDependencyResolution = false
     val classPath = mutableSetOf<ClassPathEntry>()
     val outputDirectory: File = Files.createTempDirectory("klsBuildOutput").toFile()
     val javaHome: String? = System.getProperty("java.home", null)
@@ -51,12 +55,19 @@ class CompilerClassPath(
         updateBuildScriptClassPath: Boolean = true,
         updateJavaSourcePath: Boolean = true
     ): Boolean {
+        val predefinedOnlyMode = predefinedClasspathEnabled && disableDependencyResolution
         // TODO: Fetch class path and build script class path concurrently (and asynchronously)
-        val resolver = defaultClassPathResolver(workspaceRoots, databaseService.db)
+        val resolver = if (predefinedOnlyMode) null else defaultClassPathResolver(workspaceRoots, databaseService.db)
         var refreshCompiler = updateJavaSourcePath
 
         if (updateClassPath) {
-            val newClassPath = resolver.classpathOrEmpty
+            val predefinedEntries = predefinedClassPath.map { ClassPathEntry(it) }.toSet()
+            val resolvedClassPath = resolver?.classpathOrEmpty.orEmpty()
+            val newClassPath = when {
+                predefinedOnlyMode -> predefinedEntries
+                predefinedClasspathEnabled -> resolvedClassPath + predefinedEntries
+                else -> resolvedClassPath
+            }
             if (newClassPath != classPath) {
                 synchronized(classPath) {
                     syncPaths(classPath, newClassPath, "class path") { it.compiledJar }
@@ -65,7 +76,12 @@ class CompilerClassPath(
             }
 
             async.compute {
-                val newClassPathWithSources = resolver.classpathWithSources
+                val resolvedClassPathWithSources = resolver?.classpathWithSources.orEmpty()
+                val newClassPathWithSources = when {
+                    predefinedOnlyMode -> predefinedEntries
+                    predefinedClasspathEnabled -> resolvedClassPathWithSources + predefinedEntries
+                    else -> resolvedClassPathWithSources
+                }
                 synchronized(classPath) {
                     syncPaths(classPath, newClassPathWithSources, "class path with sources") { it.compiledJar }
                 }
@@ -74,7 +90,7 @@ class CompilerClassPath(
 
         if (updateBuildScriptClassPath) {
             LOG.info("Update build script path")
-            val newBuildScriptClassPath = resolver.buildScriptClasspathOrEmpty
+            val newBuildScriptClassPath = if (predefinedOnlyMode) emptySet() else resolver?.buildScriptClasspathOrEmpty.orEmpty()
             if (newBuildScriptClassPath != buildScriptClassPath) {
                 syncPaths(buildScriptClassPath, newBuildScriptClassPath, "build script class path") { it }
                 refreshCompiler = true
@@ -112,6 +128,29 @@ class CompilerClassPath(
 
     fun updateCompilerConfiguration() {
         compiler.updateConfiguration(config)
+    }
+
+    fun updatePredefinedClasspath(entries: Collection<String>, enabled: Boolean, disableDependencyResolution: Boolean): Boolean {
+        val oldEnabled = predefinedClasspathEnabled
+        val oldDisableDependencyResolution = this.disableDependencyResolution
+        predefinedClasspathEnabled = enabled
+        this.disableDependencyResolution = disableDependencyResolution
+
+        val normalizedEntries = entries.mapNotNull { entry ->
+            runCatching { Paths.get(entry) }.getOrNull()
+        }.toSet()
+
+        if (
+            normalizedEntries == predefinedClassPath &&
+            oldEnabled == enabled &&
+            oldDisableDependencyResolution == disableDependencyResolution
+        ) {
+            return false
+        }
+
+        predefinedClassPath.clear()
+        predefinedClassPath.addAll(normalizedEntries)
+        return refresh(updateBuildScriptClassPath = false, updateJavaSourcePath = false)
     }
 
     fun addWorkspaceRoot(root: Path): Boolean {

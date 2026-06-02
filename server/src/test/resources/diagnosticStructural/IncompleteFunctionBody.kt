@@ -1,0 +1,2 @@
+class IncompleteFunctionBody {
+    fun broken() {

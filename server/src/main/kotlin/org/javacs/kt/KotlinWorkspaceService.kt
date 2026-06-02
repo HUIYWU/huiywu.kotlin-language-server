@@ -156,6 +156,20 @@ class KotlinWorkspaceService(
                 val scripts = config.scripts
                 get("enabled")?.asBoolean?.let { scripts.enabled = it }
                 get("buildScriptsEnabled")?.asBoolean?.let { scripts.buildScriptsEnabled = it }
+                get("classpath")?.asJsonArray?.let { classpathArray ->
+                    config.predefinedClasspath.entries.clear()
+                    config.predefinedClasspath.entries.addAll(classpathArray.mapNotNull { element ->
+                        runCatching { element.asString }.getOrNull()
+                    })
+                    config.predefinedClasspath.enabled = true
+                    cp.updatePredefinedClasspath(
+                        config.predefinedClasspath.entries,
+                        config.predefinedClasspath.enabled,
+                        config.predefinedClasspath.disableDependencyResolution
+                    )
+                    sp.refresh()
+                    docService.lintAll()
+                }
                 sf.updateExclusions()
             }
 

@@ -1,16 +1,24 @@
 package org.javacs.kt.classpath
 
 import org.javacs.kt.LOG
+import org.javacs.kt.util.isAndroidRuntime
 import org.jetbrains.exposed.sql.Database
 import java.nio.file.Path
 import java.nio.file.PathMatcher
 import java.nio.file.FileSystems
 
-fun defaultClassPathResolver(workspaceRoots: Collection<Path>, db: Database? = null): ClassPathResolver {
-    val childResolver = WithStdlibResolver(
-        ShellClassPathResolver.global(workspaceRoots.firstOrNull())
-            .or(workspaceRoots.asSequence().flatMap { workspaceResolvers(it) }.joined)
-    ).or(BackupClassPathResolver)
+fun defaultClassPathResolver(
+    workspaceRoots: Collection<Path>,
+    db: Database? = null,
+    allowGlobalShellFallback: Boolean = workspaceRoots.isEmpty() || !isAndroidRuntime()
+): ClassPathResolver {
+    val workspaceResolver = workspaceRoots.asSequence().flatMap { workspaceResolvers(it) }.joined
+    val resolverChain = if (allowGlobalShellFallback) {
+        workspaceResolver.or(ShellClassPathResolver.global(workspaceRoots.firstOrNull()))
+    } else {
+        workspaceResolver
+    }
+    val childResolver = WithStdlibResolver(resolverChain).or(BackupClassPathResolver)
 
     return db?.let { CachedClassPathResolver(childResolver, it) } ?: childResolver
 }

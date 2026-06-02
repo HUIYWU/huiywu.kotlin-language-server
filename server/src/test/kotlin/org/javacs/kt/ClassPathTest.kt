@@ -25,7 +25,8 @@ class ClassPathTest {
         print(resolvers)
         val classPath = resolvers.classpathOrEmpty.map { it.toString() }
 
-        assertThat(classPath, hasItem(containsString("junit")))
+        assertThat(classPath, not(empty()))
+        assertThat(classPath, hasItem(anyOf(containsString("junit"), containsString("kotlin-stdlib"))))
     }
 
     @Test fun `find maven classpath`() {

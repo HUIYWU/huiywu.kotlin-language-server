@@ -7,10 +7,10 @@ import org.junit.After
 import java.nio.file.Path
 import java.nio.file.Paths
 import java.util.concurrent.CompletableFuture
-
 abstract class LanguageServerTestFixture(
     relativeWorkspaceRoot: String,
-    config: Configuration = Configuration()
+    config: Configuration = Configuration(),
+    private val initializeParamsConfigurator: (InitializeParams) -> Unit = {}
 ) : LanguageClient {
     val workspaceRoot = absoluteWorkspaceRoot(relativeWorkspaceRoot)
     val languageServer = createLanguageServer(config)
@@ -44,6 +44,9 @@ abstract class LanguageServerTestFixture(
             name = workspaceRoot.fileName.toString()
             uri = workspaceRoot.toUri().toString()
         })
+        // Use a constructor-supplied configurator so tests can inject init options
+        // without relying on open calls during base-class initialization.
+        initializeParamsConfigurator(init)
 
         languageServer.config.inlayHints.apply {
             typeHints = true
@@ -56,6 +59,7 @@ abstract class LanguageServerTestFixture(
 
         return languageServer
     }
+
 
     @After fun closeLanguageServer() {
         languageServer.close()
@@ -149,6 +153,11 @@ abstract class LanguageServerTestFixture(
         val doc = VersionedTextDocumentIdentifier(uri(relativePath).toString(), version++)
 
         languageServer.textDocumentService.didChange(DidChangeTextDocumentParams(doc, listOf(edit)))
+    }
+
+    fun save(relativePath: String) {
+        val doc = TextDocumentIdentifier(uri(relativePath).toString())
+        languageServer.textDocumentService.didSave(DidSaveTextDocumentParams(doc))
     }
 
     // LanguageClient functions

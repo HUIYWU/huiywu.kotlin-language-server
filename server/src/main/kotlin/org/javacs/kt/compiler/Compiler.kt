@@ -466,12 +466,21 @@ class Compiler(
 ) : Closeable {
     private var closed = false
     private val localFileSystem: VirtualFileSystem
+    private val defaultClassPathRoots = classPath.toSet()
 
     private val defaultCompileEnvironment = CompilationEnvironment(javaSourcePath, classPath, scriptsConfig)
     private val buildScriptCompileEnvironment = buildScriptClassPath
         .takeIf { it.isNotEmpty() && scriptsConfig.enabled && scriptsConfig.buildScriptsEnabled }
         ?.let { CompilationEnvironment(emptySet(), it, scriptsConfig) }
     private val compileLock = ReentrantLock() // TODO: Lock at file-level
+
+    /**
+     * Exposes the classpath roots that were passed into the default compiler instance.
+     * This is intentionally test-oriented and narrower than exposing compiler internals,
+     * allowing us to verify whether CompilerClassPath and Compiler are aligned before
+     * digging further into container/analyzer behavior.
+     */
+    fun defaultJvmClasspathRootsForTests(): List<Path> = defaultClassPathRoots.toList()
 
     companion object {
         init {

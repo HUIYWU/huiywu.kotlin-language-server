@@ -9,6 +9,17 @@ internal val userHome = Paths.get(System.getProperty("user.home"))
 
 internal fun isOSWindows() = (File.separatorChar == '\\')
 
+internal fun isAndroidRuntime(): Boolean {
+    val javaHome = System.getProperty("java.home", "")
+    val vmVendor = System.getProperty("java.vm.vendor", "")
+    val vmName = System.getProperty("java.vm.name", "")
+    val runtimeName = System.getProperty("java.runtime.name", "")
+    return javaHome.contains("/data/user/0/")
+        || vmVendor.contains("The Android Project", ignoreCase = true)
+        || vmName.contains("Dalvik", ignoreCase = true)
+        || runtimeName.contains("Android", ignoreCase = true)
+}
+
 fun findCommandOnPath(name: String): Path? =
         if (isOSWindows()) windowsCommand(name)
         else unixCommand(name)
