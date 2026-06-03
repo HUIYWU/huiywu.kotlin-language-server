@@ -6,44 +6,75 @@ import org.eclipse.lsp4j.Position
 import org.eclipse.lsp4j.Range
 import org.javacs.kt.util.CompilerMessageEntry
 import org.jetbrains.kotlin.cli.common.messages.CompilerMessageSeverity
+import org.jetbrains.kotlin.cli.common.messages.CompilerMessageSourceLocation
 import java.net.URI
 import java.nio.file.Paths
 import kotlin.math.max
 
-fun convertCompilerMessage(entry: CompilerMessageEntry): Pair<URI, Diagnostic>? {
-    val location = entry.location
-    val path = location?.path
-    val severity = severity(entry.severity)
+fun convertCompilerMessage(entry: CompilerMessageEntry, fallbackUri: URI? = null): Pair<URI, Diagnostic>? {
+    val severity = severity(entry.severity) ?: return null
+    val uri = messageUri(entry.location, fallbackUri) ?: return null
+    return Pair(uri, diagnostic(entry, severity))
+}
 
-    return if (location != null && severity != null && !path.isNullOrBlank()) {
-        runCatching { Paths.get(path).toUri() }
-            .getOrNull()
-            ?.let { uri ->
-                val startLine = max(location.line - 1, 0)
-                val startChar = max(location.column - 1, 0)
+fun convertCompilerMessageOrFallback(entry: CompilerMessageEntry, fallbackUri: URI?): Pair<URI, Diagnostic>? {
+    val converted = convertCompilerMessage(entry, fallbackUri)
+    if (converted != null) return converted
 
-                val rawEndLine = if (location.lineEnd > 0) max(location.lineEnd - 1, startLine) else startLine
-                val rawEndChar = if (location.columnEnd > 0) max(location.columnEnd - 1, 0) else startChar + 1
+    val fallback = fallbackUri ?: return null
+    val severity = severity(entry.severity) ?: return null
+    return Pair(fallback, diagnostic(entry.copy(location = null), severity))
+}
 
-                val end = when {
-                    rawEndLine > startLine -> Position(rawEndLine, rawEndChar)
-                    rawEndChar > startChar -> Position(startLine, rawEndChar)
-                    else -> Position(startLine, startChar + 1)
-                }
+private fun messageUri(location: CompilerMessageSourceLocation?, fallbackUri: URI?): URI? {
+    val rawPath = location?.path?.takeIf { it.isNotBlank() }
+    val directUri = rawPath?.let { path -> runCatching { Paths.get(path).toUri() }.getOrNull() }
+    if (directUri != null) return directUri
 
-                Pair(
-                    uri,
-                    Diagnostic(
-                        Range(Position(startLine, startChar), end),
-                        entry.message,
-                        severity,
-                        "kotlin-compiler",
-                        "COMPILER_MESSAGE"
-                    )
-                )
-            }
-    } else {
-        null
+    val fallback = fallbackUri ?: return null
+    val fallbackPath = runCatching { Paths.get(fallback) }.getOrNull()
+    val fileName = fallbackPath?.fileName?.toString()
+
+    return when {
+        rawPath == null -> fallback
+        rawPath == fileName -> fallback
+        rawPath.endsWith("/$fileName") || rawPath.endsWith("\\$fileName") -> fallback
+        else -> fallback
+    }
+}
+
+private fun diagnostic(entry: CompilerMessageEntry, severity: DiagnosticSeverity): Diagnostic =
+    Diagnostic(
+        messageRange(entry.location),
+        entry.message,
+        severity,
+        "kotlin-compiler",
+        "COMPILER_MESSAGE"
+    )
+
+private fun messageRange(location: CompilerMessageSourceLocation?): Range {
+    val startLine = max((location?.line ?: 1) - 1, 0)
+    val startChar = max((location?.column ?: 1) - 1, 0)
+    return Range(
+        Position(startLine, startChar),
+        endPosition(location, startLine, startChar)
+    )
+}
+
+private fun endPosition(location: CompilerMessageSourceLocation?, startLine: Int, startChar: Int): Position {
+    val rawEndLine = location
+        ?.takeIf { it.lineEnd > 0 }
+        ?.let { max(it.lineEnd - 1, startLine) }
+        ?: startLine
+    val rawEndChar = location
+        ?.takeIf { it.columnEnd > 0 }
+        ?.let { max(it.columnEnd - 1, 0) }
+        ?: startChar + 1
+
+    return when {
+        rawEndLine > startLine -> Position(rawEndLine, rawEndChar)
+        rawEndChar > startChar -> Position(startLine, rawEndChar)
+        else -> Position(startLine, startChar + 1)
     }
 }
 

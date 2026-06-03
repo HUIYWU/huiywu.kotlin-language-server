@@ -16,42 +16,36 @@ private fun assertStructuralDiagnosticsVisible(test: SingleFileTestFixture) {
     assertThat(test.errors, not(hasSize<Diagnostic>(0)))
 }
 
-@Ignore("Structural diagnostics capability baseline for future KLS enhancement; current fwcd behavior is not yet stable enough across environments")
 class StructuralDiagnosticsExtraClosingBraceTest : SingleFileTestFixture("diagnosticStructural", "ExtraClosingBrace.kt") {
     @Test fun `open structural file reports diagnostics for extra closing brace`() {
         assertStructuralDiagnosticsVisible(this)
     }
 }
 
-@Ignore("Structural diagnostics capability baseline for future KLS enhancement; current fwcd behavior is not yet stable enough across environments")
 class StructuralDiagnosticsMissingClosingBraceTest : SingleFileTestFixture("diagnosticStructural", "MissingClosingBrace.kt") {
     @Test fun `open structural file reports diagnostics for missing closing brace`() {
         assertStructuralDiagnosticsVisible(this)
     }
 }
 
-@Ignore("Structural diagnostics capability baseline for future KLS enhancement; current fwcd behavior is not yet stable enough across environments")
 class StructuralDiagnosticsMissingClosingParenTest : SingleFileTestFixture("diagnosticStructural", "MissingClosingParen.kt") {
     @Test fun `open structural file reports diagnostics for missing closing paren`() {
         assertStructuralDiagnosticsVisible(this)
     }
 }
 
-@Ignore("Structural diagnostics capability baseline for future KLS enhancement; current fwcd behavior is not yet stable enough across environments")
 class StructuralDiagnosticsIncompleteFunctionBodyTest : SingleFileTestFixture("diagnosticStructural", "IncompleteFunctionBody.kt") {
     @Test fun `open structural file reports diagnostics for incomplete function body`() {
         assertStructuralDiagnosticsVisible(this)
     }
 }
 
-@Ignore("Structural diagnostics capability baseline for future KLS enhancement; current fwcd behavior is not yet stable enough across environments")
 class StructuralDiagnosticsIncompleteExpressionTest : SingleFileTestFixture("diagnosticStructural", "IncompleteExpression.kt") {
     @Test fun `open structural file reports diagnostics for incomplete expression`() {
         assertStructuralDiagnosticsVisible(this)
     }
 }
 
-@Ignore("Structural diagnostics capability baseline for future KLS enhancement; current fwcd behavior is not yet stable enough across environments")
 class StructuralDiagnosticsEditFlowTest : SingleFileTestFixture("diagnosticStructural", "StructuralBaseline.kt") {
     @Test fun `change introduces extra closing brace and reports diagnostics`() {
         replace(file, 5, 2, "", "\n}")

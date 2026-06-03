@@ -9,6 +9,8 @@ import org.javacs.kt.completion.completions
 import org.javacs.kt.definition.goToDefinition
 import org.javacs.kt.diagnostic.convertDiagnostic
 import org.javacs.kt.diagnostic.convertCompilerMessage
+import org.javacs.kt.diagnostic.convertCompilerMessageOrFallback
+import org.javacs.kt.diagnostic.structuralFallbackDiagnostics
 
 import org.javacs.kt.formatting.FormattingService
 import org.javacs.kt.hover.hoverAt
@@ -32,6 +34,7 @@ import org.javacs.kt.util.noResult
 import org.javacs.kt.util.parseURI
 import org.javacs.kt.util.LoggingMessageCollector
 import org.javacs.kt.util.CompilerMessageEntry
+import org.jetbrains.kotlin.cli.common.messages.CompilerMessageSeverity
 import org.jetbrains.kotlin.resolve.diagnostics.Diagnostics
 import java.net.URI
 import java.io.Closeable
@@ -317,9 +320,22 @@ class KotlinTextDocumentService(
     private fun reportDiagnostics(compiled: Collection<URI>, kotlinDiagnostics: Diagnostics, compilerMessages: List<CompilerMessageEntry>) {
         val langServerDiagnostics = kotlinDiagnostics
             .flatMap(::convertDiagnostic)
+        // Single-file lint on broken code may still produce compiler/frontend messages whose
+        // source location cannot be converted back into a stable file URI. In that narrow case,
+        // keep the message attached to the currently linted file instead of dropping it and
+        // immediately clearing diagnostics for that same file.
+        val compilerMessageFallbackUri = compiled.singleOrNull()
         val compilerDiagnostics = compilerMessages
-            .mapNotNull(::convertCompilerMessage)
-        val combinedDiagnostics = (langServerDiagnostics + compilerDiagnostics)
+            .mapNotNull {
+                if (compilerMessageFallbackUri != null) convertCompilerMessageOrFallback(it, compilerMessageFallbackUri)
+                else convertCompilerMessage(it, null)
+            }
+        val structuralFallback = compilerMessageFallbackUri
+            ?.takeIf { langServerDiagnostics.isEmpty() && compilerDiagnostics.isEmpty() }
+            ?.takeIf { sf.isOpen(it) }
+            ?.let { uri -> structuralFallbackDiagnostics(uri, sp.content(uri)) }
+            ?: emptyList()
+        val combinedDiagnostics = (langServerDiagnostics + compilerDiagnostics + structuralFallback)
             .distinctBy { (uri, diagnostic) ->
                 listOf(
                     uri.toString(),
@@ -343,8 +359,16 @@ class KotlinTextDocumentService(
             else LOG.info("Ignore {} diagnostics in {} because it's not open", diagnostics.size, describeURI(uri))
         }
 
+        val singleCompiledFile = compiled.singleOrNull()
+        val hasSingleFileCompilerErrors = singleCompiledFile != null && compilerMessages.any {
+            it.severity == CompilerMessageSeverity.ERROR || it.severity == CompilerMessageSeverity.EXCEPTION
+        }
         val noErrors = compiled - byFile.keys
         for (file in noErrors) {
+            if (hasSingleFileCompilerErrors && file == singleCompiledFile) {
+                LOG.info("Skip clearing diagnostics in {} because single-file lint produced compiler error messages", file)
+                continue
+            }
             clearDiagnostics(file)
 
             LOG.info("No diagnostics in {}", file)

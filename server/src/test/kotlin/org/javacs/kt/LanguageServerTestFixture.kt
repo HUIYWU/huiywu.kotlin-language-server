@@ -16,6 +16,7 @@ abstract class LanguageServerTestFixture(
     val languageServer = createLanguageServer(config)
 
     var diagnostics = listOf<Diagnostic>()
+    val diagnosticsHistory = mutableListOf<PublishDiagnosticsParams>()
     val errors: List<Diagnostic>
         get() = diagnostics.filter { it.severity == DiagnosticSeverity.Error }
     val warnings: List<Diagnostic>
@@ -163,6 +164,7 @@ abstract class LanguageServerTestFixture(
     // LanguageClient functions
 
     override fun publishDiagnostics(diagnostics: PublishDiagnosticsParams) {
+        diagnosticsHistory.add(diagnostics)
         this.diagnostics = diagnostics.diagnostics
     }
 
