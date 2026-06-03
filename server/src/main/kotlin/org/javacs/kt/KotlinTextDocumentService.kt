@@ -317,6 +317,7 @@ class KotlinTextDocumentService(
         }
     }
 
+    @Suppress("CyclomaticComplexMethod")
     private fun reportDiagnostics(compiled: Collection<URI>, kotlinDiagnostics: Diagnostics, compilerMessages: List<CompilerMessageEntry>) {
         val langServerDiagnostics = kotlinDiagnostics
             .flatMap(::convertDiagnostic)
@@ -360,9 +361,10 @@ class KotlinTextDocumentService(
         }
 
         val singleCompiledFile = compiled.singleOrNull()
-        val hasSingleFileCompilerErrors = singleCompiledFile != null && compilerMessages.any {
-            it.severity == CompilerMessageSeverity.ERROR || it.severity == CompilerMessageSeverity.EXCEPTION
-        }
+        val hasSingleFileCompilerErrors = config.diagnostics.enabled &&
+            singleCompiledFile != null && compilerMessages.any {
+                it.severity == CompilerMessageSeverity.ERROR || it.severity == CompilerMessageSeverity.EXCEPTION
+            }
         val noErrors = compiled - byFile.keys
         for (file in noErrors) {
             if (hasSingleFileCompilerErrors && file == singleCompiledFile) {

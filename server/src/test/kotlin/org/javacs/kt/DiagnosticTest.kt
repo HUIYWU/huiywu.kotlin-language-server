@@ -38,6 +38,9 @@ class DiagnosticTest : SingleFileTestFixture("diagnostic", "Diagnostics.kt") {
         languageServer.textDocumentService.debounceLint.waitForPendingTask()
 
         assertThat(diagnostics, empty<Diagnostic>())
+        val publishesForFile = publishesForCurrentFile()
+        assertThat(publishesForFile, not(empty()))
+        assertThat(publishesForFile.last().diagnostics, empty<Diagnostic>())
     }
 
     @Test fun `only lint once for many edits in a short period`() {

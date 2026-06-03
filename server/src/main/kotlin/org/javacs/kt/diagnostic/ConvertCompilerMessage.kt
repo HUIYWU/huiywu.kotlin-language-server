@@ -11,36 +11,35 @@ import java.net.URI
 import java.nio.file.Paths
 import kotlin.math.max
 
-fun convertCompilerMessage(entry: CompilerMessageEntry, fallbackUri: URI? = null): Pair<URI, Diagnostic>? {
-    val severity = severity(entry.severity) ?: return null
-    val uri = messageUri(entry.location, fallbackUri) ?: return null
-    return Pair(uri, diagnostic(entry, severity))
-}
+fun convertCompilerMessage(entry: CompilerMessageEntry, fallbackUri: URI? = null): Pair<URI, Diagnostic>? =
+    severity(entry.severity)?.let { diagnosticSeverity ->
+        messageUri(entry.location, fallbackUri)?.let { uri ->
+            Pair(uri, diagnostic(entry, diagnosticSeverity))
+        }
+    }
 
-fun convertCompilerMessageOrFallback(entry: CompilerMessageEntry, fallbackUri: URI?): Pair<URI, Diagnostic>? {
-    val converted = convertCompilerMessage(entry, fallbackUri)
-    if (converted != null) return converted
-
-    val fallback = fallbackUri ?: return null
-    val severity = severity(entry.severity) ?: return null
-    return Pair(fallback, diagnostic(entry.copy(location = null), severity))
-}
+fun convertCompilerMessageOrFallback(entry: CompilerMessageEntry, fallbackUri: URI?): Pair<URI, Diagnostic>? =
+    convertCompilerMessage(entry, fallbackUri)
+        ?: fallbackUri?.let { fallback ->
+            severity(entry.severity)?.let { diagnosticSeverity ->
+                Pair(fallback, diagnostic(entry.copy(location = null), diagnosticSeverity))
+            }
+        }
 
 private fun messageUri(location: CompilerMessageSourceLocation?, fallbackUri: URI?): URI? {
     val rawPath = location?.path?.takeIf { it.isNotBlank() }
-    val directUri = rawPath?.let { path -> runCatching { Paths.get(path).toUri() }.getOrNull() }
-    if (directUri != null) return directUri
+    val fallbackFileName = fallbackUri
+        ?.let { uri -> runCatching { Paths.get(uri).fileName?.toString() }.getOrNull() }
+    val matchesFallbackFileName = rawPath != null && fallbackFileName != null && (
+        rawPath == fallbackFileName ||
+            rawPath.endsWith("/$fallbackFileName") ||
+            rawPath.endsWith("\\$fallbackFileName")
+        )
+    val directUri = rawPath
+        ?.takeUnless { matchesFallbackFileName }
+        ?.let { path -> runCatching { Paths.get(path).toUri() }.getOrNull() }
 
-    val fallback = fallbackUri ?: return null
-    val fallbackPath = runCatching { Paths.get(fallback) }.getOrNull()
-    val fileName = fallbackPath?.fileName?.toString()
-
-    return when {
-        rawPath == null -> fallback
-        rawPath == fileName -> fallback
-        rawPath.endsWith("/$fileName") || rawPath.endsWith("\\$fileName") -> fallback
-        else -> fallback
-    }
+    return directUri ?: fallbackUri
 }
 
 private fun diagnostic(entry: CompilerMessageEntry, severity: DiagnosticSeverity): Diagnostic =

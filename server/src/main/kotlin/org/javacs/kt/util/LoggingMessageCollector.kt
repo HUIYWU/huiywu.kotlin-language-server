@@ -27,6 +27,16 @@ object LoggingMessageCollector : MessageCollector {
         LOG.debug("Kotlin compiler: [{}] {} @ {}", severity, message, location)
     }
 
+    fun reportStructuralFallbackMessages(entries: Collection<CompilerMessageEntry>) {
+        if (entries.isEmpty()) return
+        synchronized(messages) {
+            val hasCompilerErrors = messages.any { it.severity == CompilerMessageSeverity.ERROR || it.severity == CompilerMessageSeverity.EXCEPTION }
+            if (!hasCompilerErrors) {
+                messages.addAll(entries)
+            }
+        }
+    }
+
     override fun hasErrors() = synchronized(messages) {
         messages.any { it.severity == CompilerMessageSeverity.ERROR || it.severity == CompilerMessageSeverity.EXCEPTION }
     }

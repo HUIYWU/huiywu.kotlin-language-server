@@ -40,40 +40,35 @@ class StructuralCompilerMessageTest {
         compiler.compileKtFile(parse, listOf(parse))
         LoggingMessageCollector.drain()
     }
-
     private fun assertStructuralCompilerMessages(relativePath: String) {
         val messages = compileAndDrain(relativePath)
-        assertTrue(messages.isNotEmpty())
-        assertTrue(messages.any {
+        assertTrue("Expected compiler messages for $relativePath, but collector was empty", messages.isNotEmpty())
+        assertTrue("Expected at least one ERROR/EXCEPTION for $relativePath, actual severities=${messages.map { it.severity }}", messages.any {
             it.severity == CompilerMessageSeverity.ERROR || it.severity == CompilerMessageSeverity.EXCEPTION
         })
-        assertTrue(messages.any {
+        assertTrue("Expected at least one message with location path ending in $relativePath, actual locations=${messages.map { it.location?.path }}", messages.any {
             val path = it.location?.path
             path != null && path.endsWith(relativePath)
         })
     }
 
-    @Ignore("Structural compiler-message baseline for future KLS enhancement; direct Compiler.compileKtFile + collector assertions are still not stable enough across environments")
+
     @Test fun `extra closing brace emits compiler error messages with file location`() {
         assertStructuralCompilerMessages("ExtraClosingBrace.kt")
     }
 
-    @Ignore("Enable one structural compiler-message baseline at a time; keep broader matrix gated until cross-environment stability improves")
     @Test fun `missing closing brace emits compiler error messages with file location`() {
         assertStructuralCompilerMessages("MissingClosingBrace.kt")
     }
 
-    @Ignore("Enable one structural compiler-message baseline at a time; keep broader matrix gated until cross-environment stability improves")
     @Test fun `missing closing paren emits compiler error messages with file location`() {
         assertStructuralCompilerMessages("MissingClosingParen.kt")
     }
 
-    @Ignore("Enable one structural compiler-message baseline at a time; keep broader matrix gated until cross-environment stability improves")
     @Test fun `incomplete function body emits compiler error messages with file location`() {
         assertStructuralCompilerMessages("IncompleteFunctionBody.kt")
     }
 
-    @Ignore("Enable one structural compiler-message baseline at a time; keep broader matrix gated until cross-environment stability improves")
     @Test fun `incomplete expression emits compiler error messages with file location`() {
         assertStructuralCompilerMessages("IncompleteExpression.kt")
     }

@@ -63,6 +63,7 @@ import org.javacs.kt.ScriptsConfiguration
 import org.javacs.kt.util.KotlinLSException
 import org.javacs.kt.util.LoggingMessageCollector
 import org.jetbrains.kotlin.cli.common.output.writeAllTo
+import org.javacs.kt.diagnostic.structuralCompilerMessagesFor
 import org.jetbrains.kotlin.codegen.ClassBuilderFactories
 import org.jetbrains.kotlin.codegen.KotlinCodegenFacade
 import org.jetbrains.kotlin.codegen.state.GenerationState
@@ -558,7 +559,9 @@ class Compiler(
             val (container, trace) = compileEnv.createContainer(sourcePath)
             val module = container.getService(ModuleDescriptor::class.java)
             container.get<LazyTopDownAnalyzer>().analyzeDeclarations(TopDownAnalysisMode.TopLevelDeclarations, files)
-            return Pair(trace.bindingContext, module)
+            val bindingContext = trace.bindingContext
+            LoggingMessageCollector.reportStructuralFallbackMessages(structuralCompilerMessagesFor(files, bindingContext))
+            return Pair(bindingContext, module)
         }
     }
 
