@@ -13,7 +13,9 @@ import org.jetbrains.kotlin.descriptors.ModuleDescriptor
 import org.jetbrains.kotlin.psi.KtFile
 import org.jetbrains.kotlin.resolve.BindingContext
 import org.jetbrains.kotlin.resolve.CompositeBindingContext
+import org.jetbrains.kotlin.resolve.lazy.NoDescriptorForDeclarationException
 import org.jetbrains.kotlin.resolve.scopes.DescriptorKindFilter
+import org.jetbrains.kotlin.util.KotlinFrontEndException
 import kotlin.concurrent.withLock
 import java.nio.file.Path
 import java.nio.file.Paths
@@ -254,13 +256,37 @@ class SourcePath(
         // TODO: Investigate the possibility of compiling all files at once, instead of iterating here
         // At the moment, compiling all files at once sometimes leads to an internal error from the TopDownAnalyzer
         files.keys.forEach {
-            // If one of the files fails to compile, we compile the others anyway
+            // If one of the files fails to compile, we compile the others anyway.
+            // Some Kotlin frontend failures are recoverable in KLS full-workspace warmup and should
+            // not look like fatal server errors in IDE logs.
             try {
                 compileFiles(listOf(it))
             } catch (ex: Exception) {
-                LOG.printStackTrace(ex)
+                logCompileAllFailure(it, ex)
             }
         }
+    }
+
+    private fun logCompileAllFailure(uri: URI, ex: Exception) {
+        val root = rootCause(ex)
+        if (ex is KotlinFrontEndException || root is NoDescriptorForDeclarationException) {
+            LOG.warn(
+                    "Skipping failed compileAllFiles warmup for {}: {} caused by {}: {}",
+                    describeURI(uri),
+                    ex.javaClass.simpleName,
+                    root.javaClass.simpleName,
+                    root.message ?: "")
+        } else {
+            LOG.printStackTrace(ex)
+        }
+    }
+
+    private fun rootCause(ex: Throwable): Throwable {
+        var result = ex
+        while (result.cause != null && result.cause !== result) {
+            result = result.cause!!
+        }
+        return result
     }
 
     /**

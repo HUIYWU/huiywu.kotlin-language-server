@@ -35,7 +35,7 @@ private fun doDocumentSymbols(element: PsiElement): List<DocumentSymbol> {
 
 fun workspaceSymbols(query: String, sp: SourcePath): List<WorkspaceSymbol> =
         doWorkspaceSymbols(sp)
-                .filter { containsCharactersInOrder(it.name!!, query, false) }
+                .filter { it.name?.let { name -> containsCharactersInOrder(name, query, false) } ?: false }
                 .mapNotNull(::workspaceSymbol)
                 .toList()
 
@@ -84,4 +84,5 @@ private fun symbolContainer(d: KtNamedDeclaration): String? =
         d.parents
                 .filterIsInstance<KtNamedDeclaration>()
                 .firstOrNull()
-                ?.fqName.toString()
+                ?.fqName
+                ?.toString()

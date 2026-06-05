@@ -18,8 +18,10 @@ import org.jetbrains.kotlin.js.resolve.diagnostics.findPsi
 import org.jetbrains.kotlin.psi.*
 import org.jetbrains.kotlin.psi.psiUtil.parentsWithSelf
 import org.jetbrains.kotlin.resolve.BindingContext
+import org.jetbrains.kotlin.resolve.calls.callUtil.getType
 import org.jetbrains.kotlin.resolve.scopes.LexicalScope
 import org.jetbrains.kotlin.types.KotlinType
+import org.jetbrains.kotlin.utils.IDEAPluginsCompatibilityAPI
 import org.eclipse.lsp4j.Location
 import java.nio.file.Path
 import java.nio.file.Paths
@@ -43,6 +45,27 @@ class CompiledFile(
         val scope = scopeAtPoint(cursor) ?: return nullResult("Couldn't find scope at ${describePosition(cursor)}")
         return typeOfExpression(surroundingExpr, scope)
     }
+
+    fun originalElementAtPoint(cursor: Int): PsiElement? {
+        val oldCursor = oldOffset(cursor)
+        return parse.findElementAt(oldCursor)
+    }
+
+    fun originalExpressionAtPoint(cursor: Int): KtExpression? =
+            originalElementAtPoint(cursor)?.findParent<KtExpression>()
+
+    fun originalDeclarationAtPoint(cursor: Int): KtNamedDeclaration? =
+            originalElementAtPoint(cursor)?.findParent<KtNamedDeclaration>()
+
+    @OptIn(IDEAPluginsCompatibilityAPI::class)
+    fun originalTypeOfExpression(expression: KtExpression): KotlinType? =
+            compile[BindingContext.EXPRESSION_TYPE_INFO, expression]?.type ?: expression.getType(compile)
+
+    fun descriptorForDeclaration(declaration: KtDeclaration): DeclarationDescriptor? =
+            compile[BindingContext.DECLARATION_TO_DESCRIPTOR, declaration]
+
+    fun referenceTargetAtPoint(cursor: Int): Pair<KtExpression, DeclarationDescriptor>? =
+            referenceExpressionAtPoint(cursor)
 
     fun typeOfExpression(expression: KtExpression, scopeWithImports: LexicalScope): KotlinType? =
             bindingContextOf(expression, scopeWithImports).getType(expression)

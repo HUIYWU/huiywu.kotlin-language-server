@@ -74,6 +74,33 @@ class HoverRecoverTest : SingleFileTestFixture("hover", "Recover.kt") {
     }
 }
 
+class HoverLocalDeclarationTypeHoverTest : SingleFileTestFixture("hover", "LocalDeclarationTypeHover.kt") {
+    @Test fun `local declaration type hover should not surface internal error`() {
+        languageServer.textDocumentService.hover(hoverParams(file, 1, 10)).get()
+        languageServer.textDocumentService.hover(hoverParams(file, 6, 18)).get()
+    }
+}
+
+class HoverClassBodyHoverTest : SingleFileTestFixture("hover", "ClassBodyHover.kt") {
+    @Test fun `class body brace hover should not synthetic compile declaration`() {
+        languageServer.textDocumentService.hover(hoverParams(file, 1, 23)).get()
+    }
+}
+
+class HoverComposeLikeHoverTest : SingleFileTestFixture("hover", "ComposeLikeHover.kt") {
+    @Test fun `compose like trailing lambda hover should not surface internal error`() {
+        languageServer.textDocumentService.hover(hoverParams(file, 5, 5)).get()
+        languageServer.textDocumentService.hover(hoverParams(file, 8, 14)).get()
+        languageServer.textDocumentService.hover(hoverParams(file, 9, 14)).get()
+        languageServer.textDocumentService.hover(hoverParams(file, 10, 17)).get()
+    }
+
+    @Test fun `compose like unresolved call hover should not surface internal error`() {
+        languageServer.textDocumentService.hover(hoverParams(file, 14, 5)).get()
+        languageServer.textDocumentService.hover(hoverParams(file, 15, 9)).get()
+    }
+}
+
 class HoverAcrossFilesTest : LanguageServerTestFixture("hover") {
     @Test fun `resolve across files`() {
         val from = "ResolveFromFile.kt"

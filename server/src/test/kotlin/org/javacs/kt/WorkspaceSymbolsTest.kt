@@ -21,4 +21,12 @@ class WorkspaceSymbolsTest : SingleFileTestFixture("symbols", "DocumentSymbols.k
         assertThat(all, not(hasItem("aConstructorArg")))
         assertThat(all, not(hasItem("otherFileLocalVariable")))
     }
+
+    @Test fun `workspace symbols ignore anonymous declarations with null names`() {
+        val found = languageServer.workspaceService.symbol(WorkspaceSymbolParams("")).get().right
+        val all = found.map { it.name }.toList()
+
+        assertThat(all, hasItem("SymbolContainerWithAnonymous"))
+        assertThat(all, hasItem("anonymous"))
+    }
 }
