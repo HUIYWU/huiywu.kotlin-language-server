@@ -7,6 +7,7 @@ import org.junit.After
 import java.nio.file.Path
 import java.nio.file.Paths
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.TimeoutException
 abstract class LanguageServerTestFixture(
     relativeWorkspaceRoot: String,
     config: Configuration = Configuration(),
@@ -137,7 +138,6 @@ abstract class LanguageServerTestFixture(
             position(line, column),
             ReferenceContext(true)
         )
-
     fun open(relativePath: String) {
         val file =  workspaceRoot.resolve(relativePath)
         val content = file.toFile().readText()
@@ -145,6 +145,17 @@ abstract class LanguageServerTestFixture(
 
         languageServer.textDocumentService.didOpen(DidOpenTextDocumentParams(document))
     }
+
+    fun waitForDiagnosticsPublishHistory(minSize: Int = 1, timeoutMillis: Long = 3000) {
+        val deadline = System.currentTimeMillis() + timeoutMillis
+        while (diagnosticsHistory.size < minSize && System.currentTimeMillis() < deadline) {
+            Thread.sleep(10)
+        }
+        if (diagnosticsHistory.size < minSize) {
+            throw TimeoutException("Timed out waiting for diagnostics publish history size >= $minSize, actual=${diagnosticsHistory.size}")
+        }
+    }
+
 
     private var version = 1
 

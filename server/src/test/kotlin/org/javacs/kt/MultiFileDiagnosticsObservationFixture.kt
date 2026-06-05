@@ -9,10 +9,11 @@ open class MultiFileDiagnosticsObservationFixture(
     fun openFiles(vararg relativePaths: String) {
         relativePaths.forEach(::open)
     }
-
     fun waitForLint() {
         languageServer.textDocumentService.debounceLint.waitForPendingTask()
+        waitForDiagnosticsPublishHistory()
     }
+
 
     fun clearPublishedDiagnosticsHistory() {
         diagnosticsHistory.clear()
