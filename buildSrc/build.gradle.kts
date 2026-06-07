@@ -2,6 +2,9 @@ import java.util.Properties
 import groovy.lang.MissingPropertyException
 
 plugins {
+    // Important: use the built-in kotlin-dsl plugin without an externally resolved version.
+    // CI on Java 11/macOS failed when Gradle tried to resolve
+    // `org.gradle.kotlin.kotlin-dsl:...:4.5.0` from the plugin portal instead of using the bundled plugin.
     `kotlin-dsl`
 }
 
@@ -26,7 +29,7 @@ val javaVersion = try {
 }
 
 kotlin {
-    jvmToolchain(javaVersion.toInt())
+    jvmToolchain(javaVersion.trim().toInt())
 }
 
 dependencies {
