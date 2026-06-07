@@ -156,13 +156,19 @@ private fun chainedExpressionHints(
     file: CompiledFile,
     config: InlayHintsConfiguration
 ) {
-    if (!config.chainedHints) return
+    val next = node.nextSibling as? PsiWhiteSpace
+    val nextSiblingText = next?.nextSibling?.text
+    val continuesChainOnNextLine =
+        config.chainedHints &&
+            next != null &&
+            nextSiblingText != null &&
+            next.textContains('\n') &&
+            nextSiblingText.startsWith(".")
 
-    ///chaining is defined as an expression whose next sibling tokens are newline and dot
-    val next = (node.nextSibling as? PsiWhiteSpace)
-    val nextSiblingElement = next?.nextSibling?.node?.elementType
-
-    if (nextSiblingElement != null && nextSiblingElement == DOT) {
+    // Chaining here means the current qualified expression is continued on the next line with another
+    // leading dot, e.g. `foo\n    .bar()`. Relying on `nextSibling == DOT` is brittle across parser /
+    // platform whitespace layouts, so inspect the text between this expression and the next dot token.
+    if (continuesChainOnNextLine) {
         val hints = node.getChildrenOfType<KtCallExpression>().mapNotNull {
             it.hintBuilder(InlayKind.ChainingHint, file)
         }
