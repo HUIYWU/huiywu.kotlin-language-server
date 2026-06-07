@@ -5,6 +5,7 @@ import org.javacs.kt.classpath.defaultClassPathResolver
 import org.javacs.kt.compiler.Compiler
 import org.javacs.kt.database.DatabaseService
 import org.javacs.kt.util.AsyncExecutor
+import org.javacs.kt.util.logPerf
 import java.io.Closeable
 import java.io.File
 import java.nio.file.FileSystems
@@ -54,7 +55,10 @@ class CompilerClassPath(
         updateClassPath: Boolean = true,
         updateBuildScriptClassPath: Boolean = true,
         updateJavaSourcePath: Boolean = true
-    ): Boolean {
+    ): Boolean = logPerf(
+        "CompilerClassPath.refresh",
+        "updateClassPath=$updateClassPath, updateBuildScriptClassPath=$updateBuildScriptClassPath, updateJavaSourcePath=$updateJavaSourcePath, workspaceRoots=${workspaceRoots.size}"
+    ) {
         val predefinedOnlyMode = predefinedClasspathEnabled && disableDependencyResolution
         // TODO: Fetch class path and build script class path concurrently (and asynchronously)
         val resolver = createResolver(predefinedOnlyMode)
@@ -95,7 +99,7 @@ class CompilerClassPath(
             updateCompilerConfiguration()
         }
 
-        return refreshCompiler
+        refreshCompiler
     }
 
     private fun createResolver(predefinedOnlyMode: Boolean) =

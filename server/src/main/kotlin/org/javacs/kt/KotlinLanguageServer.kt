@@ -15,6 +15,7 @@ import org.javacs.kt.semantictokens.semanticTokensLegend
 import org.javacs.kt.util.AsyncExecutor
 import org.javacs.kt.util.TemporaryDirectory
 import org.javacs.kt.util.parseURI
+import org.javacs.kt.util.logPerf
 import org.javacs.kt.externalsources.*
 import org.javacs.kt.index.SymbolIndex
 import java.io.Closeable
@@ -72,18 +73,22 @@ class KotlinLanguageServer(
     fun getProtocolExtensionService(): KotlinProtocolExtensions = protocolExtensions
 
     override fun initialize(params: InitializeParams): CompletableFuture<InitializeResult> = async.compute {
-        val serverCapabilities = createServerCapabilities()
-        val storagePath = getStoragePath(params)
-        databaseService.setup(storagePath)
+        logPerf("initialize", "workspaceFolders=${workspaceFolders(params).size}") {
+            val serverCapabilities = createServerCapabilities()
+            val storagePath = getStoragePath(params)
+            databaseService.setup(storagePath)
 
-        applyPredefinedClasspathOptions(params)
-        applyClientCapabilities(params, serverCapabilities)
-        initializeWorkspaceFolders(params)
+            applyPredefinedClasspathOptions(params)
+            applyClientCapabilities(params, serverCapabilities)
+            initializeWorkspaceFolders(params)
 
-        textDocuments.lintAll()
+            logPerf("initialize.lintAll") {
+                textDocuments.lintAll()
+            }
 
-        val serverInfo = ServerInfo("Kotlin Language Server", VERSION)
-        InitializeResult(serverCapabilities, serverInfo)
+            val serverInfo = ServerInfo("Kotlin Language Server", VERSION)
+            InitializeResult(serverCapabilities, serverInfo)
+        }
     }
 
     private fun createServerCapabilities(): ServerCapabilities {

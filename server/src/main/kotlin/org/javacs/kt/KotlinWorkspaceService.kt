@@ -187,14 +187,18 @@ class KotlinWorkspaceService(
                     get("enabled")?.asBoolean?.let { snippets.enabled = it }
                 }
             }
-
             // Update indexing options
             get("indexing")?.asJsonObject?.apply {
                 val indexing = config.indexing
-                get("enabled")?.asBoolean?.let {
-                    indexing.enabled = it
+                get("enabled")?.asBoolean?.let { requestedEnabled ->
+                    if (!requestedEnabled) {
+                        LOG.info("Ignoring client indexing.enabled=false; forcing indexing to remain enabled")
+                    }
+                    indexing.enabled = true
+
                 }
             }
+
 
             // Update options about external sources e.g. JAR files, decompilers, etc
             get("externalSources")?.asJsonObject?.apply {

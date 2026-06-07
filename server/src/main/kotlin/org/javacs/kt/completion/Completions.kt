@@ -19,6 +19,7 @@ import org.javacs.kt.util.noResult
 import org.javacs.kt.util.stringDistance
 import org.javacs.kt.util.toPath
 import org.javacs.kt.util.onEachIndexed
+import org.javacs.kt.util.logPerf
 import org.javacs.kt.position.location
 import org.javacs.kt.imports.getImportTextEditEntry
 import org.jetbrains.kotlin.builtins.KotlinBuiltIns
@@ -52,43 +53,113 @@ import java.util.concurrent.TimeUnit
 
 // The maximum number of completion items
 private const val MAX_COMPLETION_ITEMS = 75
+private const val ELEMENT_MATERIALIZE_LIMIT = MAX_COMPLETION_ITEMS * 2
+private const val SHORT_PREFIX_ELEMENT_MATERIALIZE_LIMIT = 50
+private const val MEDIUM_PREFIX_ELEMENT_MATERIALIZE_LIMIT = 100
+private const val DETAIL_RENDER_SKIP_PREFIX_LENGTH = 2
+private const val RAW_DESCRIPTOR_LIMIT_SHORT_PREFIX = 300
+private const val RAW_DESCRIPTOR_LIMIT_MEDIUM_PREFIX = 500
+private const val RAW_DESCRIPTOR_LIMIT_LONG_PREFIX = 800
+private const val LOG_PARTIAL_ELEMENT_PREVIEW_LENGTH = 40
+private const val INFIX_COMPLETION_MIN_PARTIAL_LENGTH = 2
 
 // The minimum length after which completion lists are sorted
 private const val MIN_SORT_LENGTH = 3
 
 /** Finds completions at the specified position. */
 fun completions(file: CompiledFile, cursor: Int, index: SymbolIndex, config: CompletionConfiguration): CompletionList {
-    val partial = findPartialIdentifier(file, cursor)
+    val partial = logPerf("completion.partial", "cursor=$cursor") {
+        findPartialIdentifier(file, cursor)
+    }
     LOG.debug("Looking for completions that match '{}'", partial)
 
-    val (elementItems, element) = elementCompletionItems(file, cursor, config, partial)
-    val elementItemList = elementItems.toList()
-    val elementItemLabels = elementItemList.mapNotNull { it.label }.toSet()
+    val elementCompletion = logPerf("completion.elementItems", "partial=$partial") {
+        elementCompletionItems(file, cursor, config, partial)
+    }
+    val elementItems = elementCompletion.items
+    val element = elementCompletion.element
+    val elementMaterializeLimit = when {
+        partial.length <= 1 -> SHORT_PREFIX_ELEMENT_MATERIALIZE_LIMIT
+        partial.length == 2 -> MEDIUM_PREFIX_ELEMENT_MATERIALIZE_LIMIT
+        else -> ELEMENT_MATERIALIZE_LIMIT
+    }
+    val elementItemList = logPerf("completion.elementItems.materialize", "partial=$partial limit=$elementMaterializeLimit") {
+        elementItems.take(elementMaterializeLimit).toList()
+    }
+    // Index items are materialized before de-duplication so their import metadata can be merged into
+    // same-label element completion items when the element route skipped detail rendering.
 
     val isExhaustive = element !is KtNameReferenceExpression
                     && element !is KtTypeElement
                     && element !is KtQualifiedExpression
 
-    val items = (
-        elementItemList.asSequence()
-        + (if (!isExhaustive) indexCompletionItems(file, cursor, element, index, partial).filter { it.label !in elementItemLabels } else emptySequence())
-        + (if (elementItemList.isEmpty()) keywordCompletionItems(partial) else emptySequence())
-    )
-    val itemList = items
-        .take(MAX_COMPLETION_ITEMS)
-        .toList()
-        .onEachIndexed { i, item -> item.sortText = i.toString().padStart(2, '0') }
+    val indexItems = if (!isExhaustive) {
+        logPerf("completion.indexItems", "partial=$partial") {
+            indexCompletionItems(file, cursor, element, index, partial).toList()
+        }
+    } else {
+        emptyList()
+    }
+    val importEnhancedElementItems = mergeImportEditsFromIndexItems(elementItemList, indexItems)
+    val importEnhancedElementLabels = importEnhancedElementItems.mapNotNull { it.label }.toSet()
+    val keywordItems = if (elementItemList.isEmpty()) {
+        logPerf("completion.keywordItems", "partial=$partial") {
+            keywordCompletionItems(partial).toList()
+        }
+    } else {
+        emptyList()
+    }
+
+    val itemList = logPerf("completion.finalize", "partial=$partial") {
+        (importEnhancedElementItems.asSequence() +
+            indexItems.asSequence().filter { it.label !in importEnhancedElementLabels } +
+            keywordItems.asSequence())
+            .take(MAX_COMPLETION_ITEMS)
+            .toList()
+            .onEachIndexed { i, item -> item.sortText = i.toString().padStart(2, '0') }
+    }
     val isIncomplete = itemList.size >= MAX_COMPLETION_ITEMS || elementItemList.isEmpty()
 
     return CompletionList(isIncomplete, itemList)
 }
+
+private fun mergeImportEditsFromIndexItems(
+    elementItems: List<CompletionItem>,
+    indexItems: List<CompletionItem>
+): List<CompletionItem> {
+    val importItemsByLabel = indexItems
+        .filter { it.hasImportEdit() }
+        .groupBy { it.label }
+
+    return elementItems.map { elementItem ->
+        val label = elementItem.label
+        val importItem = label?.let { importItemsByLabel[it]?.singleOrNull() }
+
+        when {
+            label == null -> elementItem
+            importItem == null -> elementItem
+            !elementItem.canAcceptImportEditFrom(importItem) -> elementItem
+            else -> elementItem.apply {
+                detail = detail?.takeIf { it.isNotBlank() } ?: importItem.detail
+                additionalTextEdits = additionalTextEdits?.takeIf { it.isNotEmpty() } ?: importItem.additionalTextEdits
+            }
+        }
+    }
+}
+
+private fun CompletionItem.hasImportEdit(): Boolean =
+    !additionalTextEdits.isNullOrEmpty() && !detail.isNullOrBlank()
+
+private fun CompletionItem.canAcceptImportEditFrom(importItem: CompletionItem): Boolean =
+    kind == importItem.kind &&
+        additionalTextEdits.isNullOrEmpty() &&
+        !importItem.additionalTextEdits.isNullOrEmpty()
 
 private fun getQueryNameFromExpression(receiver: KtExpression?, cursor: Int, file: CompiledFile): FqName? {
     val receiverType = receiver?.let { expr -> file.scopeAtPoint(cursor)?.let { file.typeOfExpression(expr, it) } }
     return receiverType?.constructor?.declarationDescriptor?.fqNameSafe
 }
 
-/** Finds completions in the global symbol index, for potentially unimported symbols. */
 private fun indexCompletionItems(file: CompiledFile, cursor: Int, element: KtElement?, index: SymbolIndex, partial: String): Sequence<CompletionItem> {
     val parsedFile = file.parse
     val imports = parsedFile.importDirectives
@@ -116,8 +187,9 @@ private fun indexCompletionItems(file: CompiledFile, cursor: Int, element: KtEle
         else -> null
     }
 
-    return index
-        .query(partial, queryName, limit = MAX_COMPLETION_ITEMS)
+    val queriedSymbols = index.query(partial, queryName, limit = MAX_COMPLETION_ITEMS)
+
+    return queriedSymbols
         .asSequence()
         .filter { it.kind != Symbol.Kind.MODULE } // Ignore global module/package name completions for now, since they cannot be 'imported'
         .filter { it.fqName.shortName() !in importedNames && it.fqName.parent() !in wildcardPackages }
@@ -158,48 +230,117 @@ private fun keywordCompletionItems(partial: String): Sequence<CompletionItem> =
 
 data class ElementCompletionItems(val items: Sequence<CompletionItem>, val element: KtElement? = null)
 
+data class PreparedElementCompletions(
+    val descriptors: List<DeclarationDescriptor>,
+    val surroundingElement: KtElement,
+    val renderDetails: Boolean
+)
+
 /** Finds completions based on the element around the user's cursor. */
 private fun elementCompletionItems(file: CompiledFile, cursor: Int, config: CompletionConfiguration, partial: String): ElementCompletionItems {
-    val (surroundingElement, isGlobal) = completableElement(file, cursor) ?: return ElementCompletionItems(emptySequence())
-    val completions = elementCompletions(file, cursor, surroundingElement, isGlobal)
-        .applyIf(isGlobal) { filter { declarationIsInfix(it) } }
-        .applyIf(surroundingElement.endOffset == cursor) {
-            filter { containsCharactersInOrder(name(it), partial, caseSensitive = false) }
-        }
-    val sorted = completions.takeIf { partial.length >= MIN_SORT_LENGTH }?.sortedBy { stringDistance(name(it), partial) }
-        ?: completions.sortedBy { if (name(it).startsWith(partial)) 0 else 1 }
-    val visible = sorted.filter(isVisible(file, cursor))
+    val prepared = prepareElementCompletions(file, cursor, partial) ?: return ElementCompletionItems(emptySequence())
 
-    return ElementCompletionItems(visible.map { completionItem(it, surroundingElement, file, config) }, surroundingElement)
+    return ElementCompletionItems(
+        prepared.descriptors.asSequence().map {
+            logPerf("completion.elementItems.render", "partial=$partial renderDetails=${prepared.renderDetails}") {
+                completionItem(it, prepared.surroundingElement, file, config, prepared.renderDetails)
+            }
+        },
+        prepared.surroundingElement
+    )
+}
+private fun prepareElementCompletions(file: CompiledFile, cursor: Int, partial: String): PreparedElementCompletions? {
+    val (surroundingElement, isGlobal) = completableElement(file, cursor) ?: return null
+    val rawDescriptorLimit = when {
+        partial.length <= 1 -> RAW_DESCRIPTOR_LIMIT_SHORT_PREFIX
+        partial.length == 2 -> RAW_DESCRIPTOR_LIMIT_MEDIUM_PREFIX
+        else -> RAW_DESCRIPTOR_LIMIT_LONG_PREFIX
+    }
+
+    val rawSequence = logPerf("completion.elementItems.raw", "partial=$partial") {
+        elementCompletions(file, cursor, surroundingElement, isGlobal, partial)
+    }
+    val filteredDescriptors = logPerf("completion.elementItems.filter.materialize", "partial=$partial rawLimit=$rawDescriptorLimit") {
+        rawSequence
+            .applyIf(isGlobal) { filter { declarationIsInfix(it) } }
+            .applyIf(surroundingElement.endOffset == cursor) {
+                filter {
+                    val candidateName = name(it)
+                    candidateName.startsWith(partial, ignoreCase = true)
+                        || containsCharactersInOrder(candidateName, partial, caseSensitive = false)
+                }
+            }
+            .take(rawDescriptorLimit)
+            .toList()
+    }
+
+    val sortedDescriptors = logPerf("completion.elementItems.sort.materialize", "partial=$partial") {
+        if (partial.length >= MIN_SORT_LENGTH) {
+            filteredDescriptors.sortedBy { stringDistance(name(it), partial) }
+        } else {
+            filteredDescriptors.sortedBy { if (name(it).startsWith(partial)) 0 else 1 }
+        }
+    }
+
+    val visibleDescriptors = logPerf("completion.elementItems.visible.materialize", "partial=$partial") {
+        val visibilityCheck = isVisible(file, cursor)
+        sortedDescriptors.filter(visibilityCheck)
+    }
+
+    val renderDetails = partial.length > DETAIL_RENDER_SKIP_PREFIX_LENGTH
+    val materializeLimit = when {
+        partial.length <= 1 -> SHORT_PREFIX_ELEMENT_MATERIALIZE_LIMIT
+        partial.length == 2 -> MEDIUM_PREFIX_ELEMENT_MATERIALIZE_LIMIT
+        else -> ELEMENT_MATERIALIZE_LIMIT
+    }
+    val limitedDescriptors = logPerf("completion.elementItems.limit", "partial=$partial limit=$materializeLimit") {
+        visibleDescriptors.take(materializeLimit)
+    }
+
+    return PreparedElementCompletions(
+        descriptors = limitedDescriptors,
+        surroundingElement = surroundingElement,
+        renderDetails = renderDetails
+    )
 }
 
 private val callPattern = Regex("(.*)\\((?:\\$\\d+)?\\)(?:\\$0)?")
 private val methodSignature = Regex("""(?:fun|constructor) (?:<(?:[a-zA-Z\?\!\: ]+)(?:, [A-Z])*> )?([a-zA-Z]+\(.*\))""")
 
-private fun completionItem(d: DeclarationDescriptor, surroundingElement: KtElement, file: CompiledFile, config: CompletionConfiguration): CompletionItem {
+private fun completionItem(
+    d: DeclarationDescriptor,
+    surroundingElement: KtElement,
+    file: CompiledFile,
+    config: CompletionConfiguration,
+    renderDetails: Boolean
+): CompletionItem {
     val renderWithSnippets = config.snippets.enabled
         && surroundingElement !is KtCallableReferenceExpression
         && surroundingElement !is KtImportDirective
-    val result = d.accept(RenderCompletionItem(renderWithSnippets), null)
-
-    result.label = methodSignature.find(result.detail)?.groupValues?.get(1) ?: result.label
-
-    if (isNotStaticJavaMethod(d) && (isGetter(d) || isSetter(d))) {
-        val name = extractPropertyName(d)
-
-        result.detail += " (from ${result.label})"
-        result.label = name
-        result.insertText = name
-        result.filterText = name
+    val result = logPerf("completion.elementItems.render.base", "descriptor=${d::class.simpleName} renderDetails=$renderDetails") {
+        d.accept(RenderCompletionItem(renderWithSnippets, renderDetails), null)
     }
 
-    if (KotlinBuiltIns.isDeprecated(d)) {
-        result.tags = listOf(CompletionItemTag.Deprecated)
-    }
+    logPerf("completion.elementItems.render.post", "descriptor=${d::class.simpleName} renderDetails=$renderDetails") {
+        result.label = methodSignature.find(result.detail ?: "")?.groupValues?.get(1) ?: result.label
 
-    val matchCall = callPattern.matchEntire(result.insertText)
-    if (file.lineAfter(surroundingElement.endOffset).startsWith("(") && matchCall != null) {
-        result.insertText = matchCall.groups[1]!!.value
+        if (isNotStaticJavaMethod(d) && (isGetter(d) || isSetter(d))) {
+            val name = extractPropertyName(d)
+
+            result.detail = ((result.detail ?: "") + " (from ${result.label})").trim()
+            result.label = name
+            result.insertText = name
+            result.filterText = name
+        }
+
+        if (KotlinBuiltIns.isDeprecated(d)) {
+            result.tags = listOf(CompletionItemTag.Deprecated)
+        }
+
+        val matchCall = callPattern.matchEntire(result.insertText)
+        if (file.lineAfter(surroundingElement.endOffset).startsWith("(") && matchCall != null) {
+            result.insertText = matchCall.groups[1]!!.value
+        }
     }
 
     return result
@@ -285,7 +426,13 @@ private fun completableElement(file: CompiledFile, cursor: Int): Pair<KtElement,
 }
 
 @Suppress("LongMethod", "ReturnCount", "CyclomaticComplexMethod")
-private fun elementCompletions(file: CompiledFile, cursor: Int, surroundingElement: KtElement, infixCall: Boolean): Sequence<DeclarationDescriptor> {
+private fun elementCompletions(
+    file: CompiledFile,
+    cursor: Int,
+    surroundingElement: KtElement,
+    infixCall: Boolean,
+    partial: String
+): Sequence<DeclarationDescriptor> {
     return when (surroundingElement) {
         // import x.y.?
         is KtImportDirective -> {
@@ -333,7 +480,9 @@ private fun elementCompletions(file: CompiledFile, cursor: Int, surroundingEleme
         is KtQualifiedExpression -> {
             LOG.info("Completing member expression '{}'", surroundingElement.text)
             val exp = if (infixCall) surroundingElement else surroundingElement.receiverExpression
-            completeMembers(file, cursor, exp, surroundingElement is KtSafeQualifiedExpression)
+            logPerf("completion.elementCompletions.members", "partialElement=${surroundingElement.text.take(LOG_PARTIAL_ELEMENT_PREVIEW_LENGTH)}") {
+                completeMembers(file, cursor, exp, surroundingElement is KtSafeQualifiedExpression)
+            }
         }
         is KtCallableReferenceExpression -> {
             // something::?
@@ -351,11 +500,15 @@ private fun elementCompletions(file: CompiledFile, cursor: Int, surroundingEleme
         // ?
         is KtNameReferenceExpression -> {
             LOG.info("Completing identifier '{}'", surroundingElement.text)
-            if (infixCall) {
-                completeMembers(file, surroundingElement.startOffset, surroundingElement)
+            val scope = file.scopeAtPoint(surroundingElement.startOffset) ?: return noResult("No scope at ${file.describePosition(cursor)}", emptySequence())
+            if (infixCall && partial.length >= INFIX_COMPLETION_MIN_PARTIAL_LENGTH) {
+                logPerf("completion.elementCompletions.members", "partialElement=${surroundingElement.text.take(LOG_PARTIAL_ELEMENT_PREVIEW_LENGTH)} infix=true") {
+                    completeMembers(file, surroundingElement.startOffset, surroundingElement)
+                }
             } else {
-                val scope = file.scopeAtPoint(surroundingElement.startOffset) ?: return noResult("No scope at ${file.describePosition(cursor)}", emptySequence())
-                identifiers(scope)
+                logPerf("completion.elementCompletions.identifiers", "partialElement=${surroundingElement.text.take(LOG_PARTIAL_ELEMENT_PREVIEW_LENGTH)}") {
+                    identifiers(scope)
+                }
             }
         }
         // x ? y (infix)
@@ -484,20 +637,29 @@ private fun scopeExtensionFunctions(scope: HierarchicalScope): Sequence<Callable
     scope.getContributedDescriptors(DescriptorKindFilter.CALLABLES).asSequence()
             .filterIsInstance<CallableDescriptor>()
             .filter { it.isExtension }
-
 private fun identifiers(scope: LexicalScope): Sequence<DeclarationDescriptor> =
-    scope.parentsWithSelf
-            .flatMap(::scopeIdentifiers)
-            .flatMap(::explodeConstructors)
-
+    logPerf("completion.identifiers.parents", "") {
+        scope.parentsWithSelf.toList()
+    }.asSequence()
+        .flatMap { scopeIdentifiers(it) }
+        .flatMap(::explodeConstructors)
 private fun scopeIdentifiers(scope: HierarchicalScope): Sequence<DeclarationDescriptor> {
-    val locals = scope.getContributedDescriptors().asSequence()
+    val isLazyImportScope = scope::class.simpleName == "LazyImportScope"
+    if (isLazyImportScope) {
+        return emptySequence()
+    }
+
+    val locals = logPerf("completion.scopeIdentifiers.locals", "scope=${scope::class.simpleName}") {
+        scope.getContributedDescriptors().toList()
+    }.asSequence()
     val members = implicitMembers(scope)
 
     return locals + members
 }
 
+
 private fun explodeConstructors(declaration: DeclarationDescriptor): Sequence<DeclarationDescriptor> {
+
     return when (declaration) {
         is ClassDescriptor ->
             try {
@@ -514,7 +676,9 @@ private fun implicitMembers(scope: HierarchicalScope): Sequence<DeclarationDescr
     if (scope !is LexicalScope) return emptySequence()
     val implicit = scope.implicitReceiver ?: return emptySequence()
 
-    return implicit.type.memberScope.getContributedDescriptors().asSequence()
+    return logPerf("completion.implicitMembers", "scope=${scope::class.simpleName}") {
+        implicit.type.memberScope.getContributedDescriptors().toList()
+    }.asSequence()
 }
 
 private fun equalsIdentifier(identifier: String): (DeclarationDescriptor) -> Boolean =

@@ -107,7 +107,8 @@ class SymbolIndex(
                     // Remove everything first.
                     Symbols.deleteAll()
                     // Add new ones.
-                    addDeclarations(allDescriptors(module, exclusions))
+                    val allDescriptors = allDescriptors(module, exclusions)
+                    addDeclarations(allDescriptors)
 
                     val finished = System.currentTimeMillis()
                     val count = Symbols.slice(Symbols.fqName.count()).selectAll().first()[Symbols.fqName.count()]
@@ -158,11 +159,12 @@ class SymbolIndex(
     private fun addDeclarations(declarations: Sequence<DeclarationDescriptor>) =
         declarations.forEach { declaration ->
             val (descriptorFqn, extensionReceiverFqn) = getFqNames(declaration)
+            val shortNameText = descriptorFqn.shortName().toString()
 
             if (validFqName(descriptorFqn) && (extensionReceiverFqn?.let { validFqName(it) } != false)) {
                 SymbolEntity.new {
                     fqName = descriptorFqn.toString()
-                    shortName = descriptorFqn.shortName().toString()
+                    shortName = shortNameText
                     kind = declaration.accept(ExtractSymbolKind, Unit).rawValue
                     visibility = declaration.accept(ExtractSymbolVisibility, Unit).rawValue
                     extensionReceiverType = extensionReceiverFqn?.toString()
@@ -187,7 +189,11 @@ class SymbolIndex(
         // TODO: Extension completion currently only works if the receiver matches exactly,
         //       ideally this should work with subtypes as well
         SymbolEntity.find {
-            (Symbols.shortName like "$prefix$suffix") and (Symbols.extensionReceiverType eq receiverType?.toString())
+            if (receiverType != null) {
+                (Symbols.shortName like "$prefix$suffix") and (Symbols.extensionReceiverType eq receiverType.toString())
+            } else {
+                (Symbols.shortName like "$prefix$suffix")
+            }
         }.limit(limit)
             .map { Symbol(
                 fqName = FqName(it.fqName),

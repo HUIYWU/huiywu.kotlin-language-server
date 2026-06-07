@@ -20,7 +20,10 @@ val DECL_RENDERER = DescriptorRenderer.withOptions {
 
 private val GOOD_IDENTIFIER = Regex("[a-zA-Z]\\w*")
 
-class RenderCompletionItem(val snippetsEnabled: Boolean) : DeclarationDescriptorVisitor<CompletionItem, Unit> {
+class RenderCompletionItem(
+    val snippetsEnabled: Boolean,
+    private val renderDetails: Boolean = true
+) : DeclarationDescriptorVisitor<CompletionItem, Unit> {
     private val result = CompletionItem()
 
     private val functionInsertFormat
@@ -35,7 +38,9 @@ class RenderCompletionItem(val snippetsEnabled: Boolean) : DeclarationDescriptor
         result.filterText = declaration.label()
         result.insertText = escape(declaration.label()!!)
         result.insertTextFormat = PlainText
-        result.detail = DECL_RENDERER.render(declaration)
+        if (renderDetails) {
+            result.detail = DECL_RENDERER.render(declaration)
+        }
     }
 
     override fun visitPropertySetterDescriptor(desc: PropertySetterDescriptor, nothing: Unit?): CompletionItem {

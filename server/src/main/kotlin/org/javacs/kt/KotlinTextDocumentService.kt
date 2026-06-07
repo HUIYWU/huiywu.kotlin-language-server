@@ -34,6 +34,7 @@ import org.javacs.kt.util.noResult
 import org.javacs.kt.util.parseURI
 import org.javacs.kt.util.LoggingMessageCollector
 import org.javacs.kt.util.CompilerMessageEntry
+import org.javacs.kt.util.logPerf
 import org.jetbrains.kotlin.cli.common.messages.CompilerMessageSeverity
 import org.jetbrains.kotlin.resolve.diagnostics.Diagnostics
 import java.net.URI
@@ -86,22 +87,23 @@ class KotlinTextDocumentService(
         return recover(position.textDocument.uri, position.position, recompile)
     }
 
-    private fun recover(uriString: String, position: Position, recompile: Recompile): Pair<CompiledFile, Int>? {
-        val uri = parseURI(uriString)
-        if (!sf.isIncluded(uri)) {
-            LOG.warn("URI is excluded, therefore cannot be recovered: $uri")
-            return null
+    private fun recover(uriString: String, position: Position, recompile: Recompile): Pair<CompiledFile, Int>? =
+        logPerf("textDocument.recover", "uri=$uriString position=${position.line + 1}:${position.character + 1} recompile=$recompile") {
+            val uri = parseURI(uriString)
+            if (!sf.isIncluded(uri)) {
+                LOG.warn("URI is excluded, therefore cannot be recovered: $uri")
+                return@logPerf null
+            }
+            val content = sp.content(uri)
+            val offset = offset(content, position.line, position.character)
+            val shouldRecompile = when (recompile) {
+                Recompile.ALWAYS -> true
+                Recompile.AFTER_DOT -> offset > 0 && content[offset - 1] == '.'
+                Recompile.NEVER -> false
+            }
+            val compiled = if (shouldRecompile) sp.currentVersion(uri) else sp.latestCompiledVersion(uri)
+            Pair(compiled, offset)
         }
-        val content = sp.content(uri)
-        val offset = offset(content, position.line, position.character)
-        val shouldRecompile = when (recompile) {
-            Recompile.ALWAYS -> true
-            Recompile.AFTER_DOT -> offset > 0 && content[offset - 1] == '.'
-            Recompile.NEVER -> false
-        }
-        val compiled = if (shouldRecompile) sp.currentVersion(uri) else sp.latestCompiledVersion(uri)
-        return Pair(compiled, offset)
-    }
 
     override fun codeAction(params: CodeActionParams): CompletableFuture<List<Either<Command, CodeAction>>> = async.compute {
         val (file, _) = recover(params.textDocument.uri, params.range.start, Recompile.NEVER) ?: return@compute emptyList()
@@ -118,7 +120,9 @@ class KotlinTextDocumentService(
             LOG.info("Hovering at {}", describePosition(position))
 
             val (file, cursor) = recover(position, Recompile.NEVER) ?: return@compute null
-            hoverAt(file, cursor) ?: noResult("No hover found at ${describePosition(position)}", null)
+            logPerf("textDocument/hover", describePosition(position)) {
+                hoverAt(file, cursor) ?: noResult("No hover found at ${describePosition(position)}", null)
+            }
         }
     }
 
@@ -164,11 +168,14 @@ class KotlinTextDocumentService(
         reportTime {
             LOG.info("Completing at {}", describePosition(position))
 
-            val (file, cursor) = recover(position, Recompile.NEVER) ?: return@compute Either.forRight(CompletionList()) // TODO: Investigate when to recompile
-            val completions = completions(file, cursor, sp.index, config.completion)
-            LOG.info("Found {} items", completions.items.size)
+            val recovered = recover(position, Recompile.NEVER)
+                ?: return@compute Either.forRight(CompletionList()) // TODO: Investigate when to recompile
+            val (file, cursor) = recovered
+            val completionResult = logPerf("textDocument.completion.total", describePosition(position)) {
+                completions(file, cursor, sp.index, config.completion)
+            }
 
-            Either.forRight(completions)
+            Either.forRight(completionResult)
         }
     }
 
@@ -191,15 +198,21 @@ class KotlinTextDocumentService(
     override fun didOpen(params: DidOpenTextDocumentParams) {
         val uri = parseURI(params.textDocument.uri)
         sf.open(uri, params.textDocument.text, params.textDocument.version)
-        lintNow(uri)
+        logPerf("textDocument/didOpen", describeURI(uri)) {
+            lintNow(uri)
+        }
     }
 
     override fun didSave(params: DidSaveTextDocumentParams) {
         // Lint after saving to prevent inconsistent diagnostics
         val uri = parseURI(params.textDocument.uri)
-        lintNow(uri)
+        logPerf("textDocument/didSave.lintNow", describeURI(uri)) {
+            lintNow(uri)
+        }
         debounceLint.schedule {
-            sp.save(uri)
+            logPerf("textDocument/didSave.persist", describeURI(uri)) {
+                sp.save(uri)
+            }
         }
     }
 
@@ -230,7 +243,9 @@ class KotlinTextDocumentService(
     override fun didChange(params: DidChangeTextDocumentParams) {
         val uri = parseURI(params.textDocument.uri)
         sf.edit(uri, params.textDocument.version, params.contentChanges)
-        lintLater(uri)
+        logPerf("textDocument/didChange", describeURI(uri)) {
+            lintLater(uri)
+        }
     }
 
     override fun references(position: ReferenceParams) = async.compute {

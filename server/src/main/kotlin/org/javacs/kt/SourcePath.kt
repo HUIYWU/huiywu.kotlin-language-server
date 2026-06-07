@@ -5,6 +5,7 @@ import org.javacs.kt.util.AsyncExecutor
 import org.javacs.kt.util.fileExtension
 import org.javacs.kt.util.filePath
 import org.javacs.kt.util.describeURI
+import org.javacs.kt.util.logPerf
 import org.javacs.kt.index.SymbolIndex
 import org.javacs.kt.progress.Progress
 import com.intellij.lang.Language
@@ -96,18 +97,20 @@ class SourcePath(
         fun compile() = parse().apply { doCompile() }
 
         private fun doCompile() {
-            LOG.debug("Compiling {}", path?.fileName)
+            logPerf("SourcePath.doCompile", path?.fileName?.toString() ?: uri.toString()) {
+                LOG.debug("Compiling {}", path?.fileName)
 
-            val oldFile = clone()
+                val oldFile = clone()
 
-            val (context, module) = cp.compiler.compileKtFile(parsed!!, allIncludingThis(), kind)
-            parseDataWriteLock.withLock {
-                compiledContext = context
-                this.module = module
-                compiledFile = parsed
+                val (context, module) = cp.compiler.compileKtFile(parsed!!, allIncludingThis(), kind)
+                parseDataWriteLock.withLock {
+                    compiledContext = context
+                    this.module = module
+                    compiledFile = parsed
+                }
+
+                refreshWorkspaceIndexes(listOfNotNull(oldFile), listOfNotNull(this))
             }
-
-            refreshWorkspaceIndexes(listOfNotNull(oldFile), listOfNotNull(this))
         }
 
         private fun doCompileIfChanged() {
@@ -253,16 +256,18 @@ class SourcePath(
     }
 
     fun compileAllFiles() {
-        // TODO: Investigate the possibility of compiling all files at once, instead of iterating here
-        // At the moment, compiling all files at once sometimes leads to an internal error from the TopDownAnalyzer
-        files.keys.forEach {
-            // If one of the files fails to compile, we compile the others anyway.
-            // Some Kotlin frontend failures are recoverable in KLS full-workspace warmup and should
-            // not look like fatal server errors in IDE logs.
-            try {
-                compileFiles(listOf(it))
-            } catch (ex: Exception) {
-                logCompileAllFailure(it, ex)
+        logPerf("SourcePath.compileAllFiles", "fileCount=${files.size}") {
+            // TODO: Investigate the possibility of compiling all files at once, instead of iterating here
+            // At the moment, compiling all files at once sometimes leads to an internal error from the TopDownAnalyzer
+            files.keys.forEach {
+                // If one of the files fails to compile, we compile the others anyway.
+                // Some Kotlin frontend failures are recoverable in KLS full-workspace warmup and should
+                // not look like fatal server failures in logs.
+                try {
+                    currentVersion(it)
+                } catch (ex: Exception) {
+                    logCompileAllFailure(it, ex)
+                }
             }
         }
     }
