@@ -7,6 +7,7 @@ import org.junit.After
 import java.nio.file.Path
 import java.nio.file.Paths
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.TimeoutException
 abstract class LanguageServerTestFixture(
     relativeWorkspaceRoot: String,
@@ -16,8 +17,9 @@ abstract class LanguageServerTestFixture(
     val workspaceRoot = absoluteWorkspaceRoot(relativeWorkspaceRoot)
     val languageServer = createLanguageServer(config)
 
+    @Volatile
     var diagnostics = listOf<Diagnostic>()
-    val diagnosticsHistory = mutableListOf<PublishDiagnosticsParams>()
+    val diagnosticsHistory = CopyOnWriteArrayList<PublishDiagnosticsParams>()
     val errors: List<Diagnostic>
         get() = diagnostics.filter { it.severity == DiagnosticSeverity.Error }
     val warnings: List<Diagnostic>

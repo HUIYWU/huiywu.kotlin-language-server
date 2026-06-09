@@ -193,7 +193,13 @@ class SourceFiles(
         LOG.info("Updated exclusions: ${exclusions.excludedPatterns}")
     }
 
-    fun isOpen(uri: URI): Boolean = (uri in open)
+    fun isOpen(uri: URI): Boolean = uri in open || open.any { isSameFileUri(it, uri) }
+
+    private fun isSameFileUri(left: URI, right: URI): Boolean {
+        val leftPath = left.filePath?.toAbsolutePath()?.normalize()
+        val rightPath = right.filePath?.toAbsolutePath()?.normalize()
+        return leftPath != null && leftPath == rightPath
+    }
 
     fun isIncluded(uri: URI): Boolean = exclusions.isURIIncluded(uri)
 }

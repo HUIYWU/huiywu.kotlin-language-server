@@ -109,10 +109,10 @@ private fun callableArgNameHints(
     val resolvedCall = callExpression.getResolvedCall(file.compile)
     val entries = resolvedCall?.valueArguments?.entries ?: return
 
-    val hints = entries.mapNotNull { (t, u) ->
-        val valueArg = u.arguments.firstOrNull()
+    val hints = entries.mapNotNull { (parameter, resolvedArgument) ->
+        val valueArg = resolvedArgument.arguments.firstOrNull { !it.isNamed() }
         if (valueArg != null && !valueArg.isNamed()) {
-            val label = getArgLabel(t.name, u)
+            val label = getArgLabel(parameter.name, resolvedArgument)
             valueArg.asElement().hintBuilder(InlayKind.ParameterHint, file, label)
         } else null
     }
