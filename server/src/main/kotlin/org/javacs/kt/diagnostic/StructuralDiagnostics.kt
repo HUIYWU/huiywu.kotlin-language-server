@@ -7,6 +7,8 @@ import org.eclipse.lsp4j.Range
 import java.net.URI
 import java.util.ArrayDeque
 
+private fun Char.isLineTerminator(): Boolean = this == '\n' || this == '\r'
+
 private data class StructuralDelimiterState(
     val char: Char,
     val line: Int,
@@ -467,7 +469,7 @@ private class StructuralLexicalActiveModeHandler(
                 lexicalMode.leaveMode()
                 unterminatedTokens.finish(StructuralUnterminatedTokenKind.STRING)
             }
-            cursor.current() == '\n' -> return StructuralActiveModeResult(handled = true, shouldStopScanning = true)
+            cursor.current().isLineTerminator() -> return StructuralActiveModeResult(handled = true, shouldStopScanning = true)
         }
         cursor.advanceOne()
         return StructuralActiveModeResult(handled = true)
@@ -493,7 +495,7 @@ private class StructuralLexicalActiveModeHandler(
                 lexicalMode.leaveMode()
                 unterminatedTokens.finish(StructuralUnterminatedTokenKind.CHAR)
             }
-            cursor.current() == '\n' -> return StructuralActiveModeResult(handled = true, shouldStopScanning = true)
+            cursor.current().isLineTerminator() -> return StructuralActiveModeResult(handled = true, shouldStopScanning = true)
         }
         cursor.advanceOne()
         return StructuralActiveModeResult(handled = true)

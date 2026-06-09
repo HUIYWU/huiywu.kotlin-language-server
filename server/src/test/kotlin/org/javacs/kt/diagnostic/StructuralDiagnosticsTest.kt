@@ -406,6 +406,22 @@ class StructuralDiagnosticsTest {
         )
     }
 
+    @Test fun `unterminated string literal with CRLF does not cascade into delimiter diagnostics`() {
+        val diagnostics = structuralDiagnostics(
+            uri,
+            "class UnterminatedStringLiteral {\r\n" +
+                "    fun broken() {\r\n" +
+                "        val value = \"oops\r\n" +
+                "    }\r\n" +
+                "}"
+        )
+
+        assertThat(
+            diagnostics.map { diagnosticCode(it.second) },
+            equalTo(listOf(STRUCTURAL_UNTERMINATED_STRING_LITERAL))
+        )
+    }
+
     @Test fun `unterminated raw string literal does not cascade into delimiter diagnostics`() {
         val diagnostics = structuralDiagnostics(uri, """
             class UnterminatedRawStringLiteral {
