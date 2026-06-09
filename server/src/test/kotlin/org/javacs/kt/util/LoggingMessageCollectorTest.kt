@@ -17,7 +17,7 @@ class LoggingMessageCollectorTest {
         LoggingMessageCollector.clear()
     }
 
-    @Test fun `reports structural fallback messages when collector has no compiler errors`() {
+    @Test fun `reports structural messages when collector has no compiler errors`() {
         val structuralEntries = listOf(
             CompilerMessageEntry(
                 severity = CompilerMessageSeverity.ERROR,
@@ -26,14 +26,14 @@ class LoggingMessageCollectorTest {
             )
         )
 
-        LoggingMessageCollector.reportStructuralFallbackMessages(structuralEntries)
+        LoggingMessageCollector.reportStructuralMessages(structuralEntries)
 
         assertThat(LoggingMessageCollector.drain(), equalTo(structuralEntries))
     }
 
-    @Test fun `skips structural fallback messages when compiler error already exists`() {
+    @Test fun `skips structural messages when compiler error already exists`() {
         LoggingMessageCollector.report(CompilerMessageSeverity.ERROR, "Native compiler error", null)
-        LoggingMessageCollector.reportStructuralFallbackMessages(
+        LoggingMessageCollector.reportStructuralMessages(
             listOf(
                 CompilerMessageEntry(
                     severity = CompilerMessageSeverity.ERROR,
@@ -48,9 +48,9 @@ class LoggingMessageCollectorTest {
         assertThat(drained.map { it.message }, equalTo(listOf("Native compiler error")))
     }
 
-    @Test fun `allows structural fallback messages when collector only has warnings`() {
+    @Test fun `allows structural messages when collector only has warnings`() {
         LoggingMessageCollector.report(CompilerMessageSeverity.WARNING, "Native compiler warning", null)
-        LoggingMessageCollector.reportStructuralFallbackMessages(
+        LoggingMessageCollector.reportStructuralMessages(
             listOf(
                 CompilerMessageEntry(
                     severity = CompilerMessageSeverity.ERROR,

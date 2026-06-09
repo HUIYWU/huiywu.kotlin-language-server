@@ -560,7 +560,7 @@ class Compiler(
             val module = container.getService(ModuleDescriptor::class.java)
             container.get<LazyTopDownAnalyzer>().analyzeDeclarations(TopDownAnalysisMode.TopLevelDeclarations, files)
             val bindingContext = trace.bindingContext
-            LoggingMessageCollector.reportStructuralFallbackMessages(structuralCompilerMessagesFor(files, bindingContext))
+            LoggingMessageCollector.reportStructuralMessages(structuralCompilerMessagesFor(files, bindingContext))
             return Pair(bindingContext, module)
         }
     }

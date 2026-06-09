@@ -10,7 +10,8 @@ import org.javacs.kt.definition.goToDefinition
 import org.javacs.kt.diagnostic.convertDiagnostic
 import org.javacs.kt.diagnostic.convertCompilerMessage
 import org.javacs.kt.diagnostic.convertCompilerMessageOrFallback
-import org.javacs.kt.diagnostic.structuralFallbackDiagnostics
+import org.javacs.kt.diagnostic.mergeStructuralDiagnostics
+import org.javacs.kt.diagnostic.structuralDiagnostics
 
 import org.javacs.kt.formatting.FormattingService
 import org.javacs.kt.hover.hoverAt
@@ -332,6 +333,8 @@ class KotlinTextDocumentService(
         }
     }
 
+    // Diagnostic merge policy lives in diagnostic/DiagnosticMerger.kt.
+
     @Suppress("CyclomaticComplexMethod")
     private fun reportDiagnostics(compiled: Collection<URI>, kotlinDiagnostics: Diagnostics, compilerMessages: List<CompilerMessageEntry>) {
         val langServerDiagnostics = kotlinDiagnostics
@@ -346,12 +349,14 @@ class KotlinTextDocumentService(
                 if (compilerMessageFallbackUri != null) convertCompilerMessageOrFallback(it, compilerMessageFallbackUri)
                 else convertCompilerMessage(it, null)
             }
-        val structuralFallback = compilerMessageFallbackUri
-            ?.takeIf { langServerDiagnostics.isEmpty() && compilerDiagnostics.isEmpty() }
+        val structuralDiagnosticItems = compilerMessageFallbackUri
             ?.takeIf { sf.isOpen(it) }
-            ?.let { uri -> structuralFallbackDiagnostics(uri, sp.content(uri)) }
+            ?.let { uri -> structuralDiagnostics(uri, sp.content(uri)) }
             ?: emptyList()
-        val combinedDiagnostics = (langServerDiagnostics + compilerDiagnostics + structuralFallback)
+        val combinedDiagnostics = mergeStructuralDiagnostics(
+            langServerDiagnostics + compilerDiagnostics,
+            structuralDiagnosticItems
+        )
             .distinctBy { (uri, diagnostic) ->
                 listOf(
                     uri.toString(),

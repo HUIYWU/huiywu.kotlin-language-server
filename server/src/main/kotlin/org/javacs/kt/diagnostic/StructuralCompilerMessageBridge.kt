@@ -17,7 +17,7 @@ fun structuralCompilerMessagesFor(files: Collection<KtFile>, bindingContext: Bin
     val bridgedDiagnostics = structuralCompilerMessagesFromDiagnostics(bindingContext)
     if (bridgedDiagnostics.isNotEmpty()) return bridgedDiagnostics
 
-    return files.flatMap(::structuralCompilerMessagesFromFallback)
+    return files.flatMap(::structuralCompilerMessagesFromScanner)
 }
 
 fun structuralCompilerMessagesFromDiagnostics(bindingContext: BindingContext): List<CompilerMessageEntry> {
@@ -41,10 +41,10 @@ fun structuralCompilerMessagesFromDiagnostics(bindingContext: BindingContext): L
         .toList()
 }
 
-private fun structuralCompilerMessagesFromFallback(file: KtFile): List<CompilerMessageEntry> {
+private fun structuralCompilerMessagesFromScanner(file: KtFile): List<CompilerMessageEntry> {
     val uri = file.toPath().toUri()
     val content = file.text
-    return structuralFallbackDiagnostics(uri, content)
+    return structuralDiagnostics(uri, content)
         .map { (_, diagnostic) ->
             CompilerMessageEntry(
                 severity = CompilerMessageSeverity.ERROR,
