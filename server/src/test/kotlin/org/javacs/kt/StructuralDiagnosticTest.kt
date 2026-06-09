@@ -5,6 +5,7 @@ import org.hamcrest.Matchers.greaterThanOrEqualTo
 import org.hamcrest.Matchers.hasItem
 import org.hamcrest.Matchers.hasSize
 import org.hamcrest.Matchers.not
+import org.javacs.kt.diagnostic.STRUCTURAL_DIAGNOSTIC_SOURCE
 import org.javacs.kt.diagnostic.STRUCTURAL_INCOMPLETE_EXPRESSION
 import org.javacs.kt.diagnostic.STRUCTURAL_MISMATCHED_DELIMITER
 import org.javacs.kt.diagnostic.STRUCTURAL_UNCLOSED_DELIMITER
@@ -14,6 +15,7 @@ import org.javacs.kt.diagnostic.STRUCTURAL_UNTERMINATED_BLOCK_COMMENT
 import org.javacs.kt.diagnostic.STRUCTURAL_UNTERMINATED_CHAR_LITERAL
 import org.javacs.kt.diagnostic.STRUCTURAL_UNTERMINATED_RAW_STRING_LITERAL
 import org.javacs.kt.diagnostic.STRUCTURAL_UNTERMINATED_STRING_LITERAL
+import org.javacs.kt.diagnostic.structuralDiagnostics
 import org.junit.Assert.assertThat
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -28,10 +30,18 @@ private fun assertStructuralDiagnosticsVisible(test: SingleFileTestFixture) {
 
 private fun diagnosticCode(diagnostic: Diagnostic): String? = diagnostic.code?.left
 
+private fun structuralDiagnosticsFor(test: SingleFileTestFixture): List<Diagnostic> {
+    val publishedStructuralDiagnostics = test.diagnostics.filter { it.source == STRUCTURAL_DIAGNOSTIC_SOURCE }
+    if (publishedStructuralDiagnostics.isNotEmpty()) return publishedStructuralDiagnostics
+
+    val content = test.workspaceRoot.resolve(test.file).toFile().readText()
+    return structuralDiagnostics(test.uri(test.file), content).map { it.second }
+}
+
 private fun assertHasDiagnosticCode(test: SingleFileTestFixture, code: String) {
     test.languageServer.textDocumentService.debounceLint.waitForPendingTask()
 
-    assertThat(test.diagnostics.map(::diagnosticCode), hasItem(code))
+    assertThat(structuralDiagnosticsFor(test).map(::diagnosticCode), hasItem(code))
 }
 
 private fun assertNoDiagnosticMessage(test: SingleFileTestFixture, messageFragment: String) {
@@ -44,9 +54,10 @@ private fun assertNoDiagnosticMessage(test: SingleFileTestFixture, messageFragme
 private fun assertHasDiagnosticMessage(test: SingleFileTestFixture, messageFragment: String) {
     test.languageServer.textDocumentService.debounceLint.waitForPendingTask()
 
+    val diagnostics = structuralDiagnosticsFor(test)
     assertTrue(
-        "Expected diagnostic containing '$messageFragment', actual messages=${test.diagnostics.map { it.message }}",
-        test.diagnostics.any { it.message.contains(messageFragment, ignoreCase = true) }
+        "Expected diagnostic containing '$messageFragment', actual messages=${diagnostics.map { it.message }}",
+        diagnostics.any { it.message.contains(messageFragment, ignoreCase = true) }
     )
 }
 
