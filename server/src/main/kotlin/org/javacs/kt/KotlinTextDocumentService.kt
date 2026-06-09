@@ -350,7 +350,6 @@ class KotlinTextDocumentService(
                 else convertCompilerMessage(it, null)
             }
         val structuralDiagnosticItems = compilerMessageFallbackUri
-            ?.takeIf { sf.isOpen(it) }
             ?.let { uri -> structuralDiagnostics(uri, sp.content(uri)) }
             ?: emptyList()
         val combinedDiagnostics = mergeStructuralDiagnostics(
